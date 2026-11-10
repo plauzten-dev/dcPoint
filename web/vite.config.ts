@@ -17,16 +17,10 @@ export default defineConfig({
       '/gateway': { target: backend.replace(/^http/, 'ws'), ws: true },
     },
   },
+  // Chunking is left to Rollup: hand-written manualChunks created a circular
+  // import between the react and vendor chunks (blank page in production).
   build: {
     target: 'es2022',
     sourcemap: false,
-    rollupOptions: {
-      output: {
-        manualChunks: {
-          react: ['react', 'react-dom', 'react-dom/client', 'react-router'],
-          vendor: ['zustand', '@tanstack/react-query', '@tanstack/react-virtual'],
-        },
-      },
-    },
   },
 });

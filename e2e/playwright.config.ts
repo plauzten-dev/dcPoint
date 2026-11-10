@@ -24,7 +24,8 @@ export default defineConfig({
           env: { DATABASE_URL: databaseUrl, AUTH_RATE_LIMIT_PER_MIN: '0', BIND_ADDR: '127.0.0.1:8080' },
         },
         {
-          command: 'npm run dev -- --host 127.0.0.1',
+          // Test the production bundle (what Docker ships), not the dev server.
+          command: 'npm run build && npx vite preview --host 127.0.0.1 --port 5173 --strictPort',
           cwd: '../web',
           url: baseURL,
           reuseExistingServer: true,
