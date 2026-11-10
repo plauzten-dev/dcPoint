@@ -14,8 +14,6 @@ services:
       interval: 5s
       timeout: 3s
       retries: 20
-    ports:
-      - "5432:5432"
 
   redis:
     image: redis:7-alpine
@@ -23,33 +21,37 @@ services:
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 5s
-    ports:
-      - "6379:6379"
 
-  minio:
-    image: minio/minio:latest
-    command: server /data --console-address ":9001"
-    environment:
-      MINIO_ROOT_USER: dcpoint
-      MINIO_ROOT_PASSWORD: dcpoint-minio-secret
+  # S3-compatible object storage. MinIO no longer publishes images on Docker Hub,
+  # so SeaweedFS is used; any S3-compatible service works via S3_ENDPOINT.
+  seaweedfs:
+    image: chrislusf/seaweedfs:latest
+    command: ["server", "-s3", "-s3.port=8333", "-s3.config=/etc/seaweedfs/s3.json"]
     volumes:
-      - minio:/data
-    healthcheck:
-      test: ["CMD", "mc", "ready", "local"]
-      interval: 5s
-      retries: 20
+      - seaweedfs:/data
+      - ./deploy/seaweedfs-s3.json:/etc/seaweedfs/s3.json:ro
     ports:
-      - "9000:9000"
-      - "9001:9001"
+      - "8333:8333"
 
-  minio-init:
-    image: minio/mc:latest
+  # Creates the upload bucket once SeaweedFS is reachable.
+  s3-init:
+    image: amazon/aws-cli:latest
     depends_on:
-      minio:
-        condition: service_healthy
-    entrypoint: >
-      /bin/sh -c "mc alias set local http://minio:9000 dcpoint dcpoint-minio-secret &&
-                  mc mb --ignore-existing local/dcpoint"
+      - seaweedfs
+    environment:
+      AWS_ACCESS_KEY_ID: dcpoint
+      AWS_SECRET_ACCESS_KEY: dcpoint-s3-secret-change-me
+      AWS_DEFAULT_REGION: us-east-1
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        for i in $$(seq 1 90); do
+          aws --endpoint-url http://seaweedfs:8333 s3api head-bucket --bucket dcpoint 2>/dev/null && echo "bucket ready" && exit 0
+          aws --endpoint-url http://seaweedfs:8333 s3 mb s3://dcpoint 2>/dev/null && echo "bucket created" && exit 0
+          sleep 2
+        done
+        echo "S3 not reachable"
+        exit 1
     restart: "no"
 
   livekit:
@@ -69,16 +71,16 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
-      minio-init:
+      s3-init:
         condition: service_completed_successfully
     environment:
       DATABASE_URL: postgres://dcpoint:dcpoint@postgres:5432/dcpoint
       REDIS_URL: redis://redis:6379
       SECRET_KEY: ${SECRET_KEY:-change-me-to-a-long-random-string-0123456789}
-      S3_ENDPOINT: http://minio:9000
+      S3_ENDPOINT: http://seaweedfs:8333
       S3_BUCKET: dcpoint
       S3_ACCESS_KEY: dcpoint
-      S3_SECRET_KEY: dcpoint-minio-secret
+      S3_SECRET_KEY: dcpoint-s3-secret-change-me
       CORS_ORIGINS: http://localhost:8000,http://localhost:5173,tauri://localhost,http://tauri.localhost
       TRUST_PROXY: "true"
       RUST_LOG: dcpoint=info,tower_http=warn
@@ -95,4 +97,4 @@ services:
 
 volumes:
   postgres:
-  minio:
+  seaweedfs:

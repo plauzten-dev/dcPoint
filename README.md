@@ -51,10 +51,11 @@ Danach:
 |---|---|
 | Web-App | http://localhost:8000 |
 | API / Gateway | http://localhost:8080 |
-| MinIO-Konsole | http://localhost:9001 (`dcpoint` / `dcpoint-minio-secret`) |
+| S3-Speicher (SeaweedFS) | http://localhost:8333 |
 | LiveKit (ab Phase 4) | ws://localhost:7880 |
 
-Für den Produktivbetrieb unbedingt `SECRET_KEY` (≥ 32 Zeichen), die MinIO-Zugangsdaten und die
+Für den Produktivbetrieb unbedingt `SECRET_KEY` (≥ 32 Zeichen), die S3-Zugangsdaten
+(`deploy/seaweedfs-s3.json` und `docker-compose.yml`) und die
 LiveKit-Schlüssel in `deploy/livekit.yaml` ändern.
 
 ## Entwicklung ohne Docker
@@ -123,7 +124,7 @@ cd e2e && npm install && npx playwright install chromium && npm test
 | `BIND_ADDR` | `0.0.0.0:8080` | Adresse des HTTP-Servers |
 | `SECRET_KEY` | unsicherer Dev-Schlüssel | HMAC-Schlüssel für 2FA-Tickets (≥ 32 Zeichen) |
 | `CORS_ORIGINS` | `http://localhost:5173,http://tauri.localhost,tauri://localhost` | Erlaubte Origins |
-| `S3_ENDPOINT`, `S3_BUCKET`, `S3_REGION`, `S3_ACCESS_KEY`, `S3_SECRET_KEY` | – | S3/MinIO; ohne `S3_ENDPOINT` lokaler Speicher |
+| `S3_ENDPOINT`, `S3_BUCKET`, `S3_REGION`, `S3_ACCESS_KEY`, `S3_SECRET_KEY` | – | S3-kompatibler Speicher (SeaweedFS, MinIO, AWS …); ohne `S3_ENDPOINT` lokaler Speicher |
 | `UPLOAD_DIR` | `./data/uploads` | Lokaler Speicherort ohne S3 |
 | `TRUST_PROXY` | `false` | `X-Real-IP` vertrauen (nur hinter Reverse Proxy) |
 | `AUTH_RATE_LIMIT_PER_MIN` | `30` | Auth-Anfragen pro IP und Minute (`0` = aus) |

@@ -1,11 +1,11 @@
-//! Object storage: S3-compatible (MinIO) in production, local filesystem in development.
+//! Object storage: any S3-compatible service (SeaweedFS, MinIO, AWS) or the local filesystem.
 
 use std::path::PathBuf;
 
 use anyhow::Context;
 use bytes::Bytes;
 use s3::creds::Credentials;
-use s3::{Bucket, Region};
+use s3::{Bucket, BucketConfiguration, Region};
 
 use crate::config::Config;
 
@@ -36,9 +36,10 @@ impl Storage {
                 let creds =
                     Credentials::new(Some(&s3.access_key), Some(&s3.secret_key), None, None, None)
                         .context("invalid S3 credentials")?;
-                let bucket = Bucket::new(&s3.bucket, region, creds)
+                let bucket = Bucket::new(&s3.bucket, region.clone(), creds.clone())
                     .context("invalid S3 bucket")?
                     .with_path_style();
+                ensure_bucket(&bucket, region, creds).await;
                 tracing::info!(endpoint = %s3.endpoint, bucket = %s3.bucket, "using S3 storage");
                 Ok(Storage::S3(bucket))
             }
@@ -96,6 +97,34 @@ impl Storage {
             },
         }
     }
+}
+
+/// Creates the bucket if it does not exist yet. Retries for a while because the
+/// S3 service may still be starting (e.g. in docker compose).
+async fn ensure_bucket(bucket: &Bucket, region: Region, creds: Credentials) {
+    for attempt in 1..=30 {
+        match bucket.exists().await {
+            Ok(true) => return,
+            Ok(false) => match Bucket::create_with_path_style(
+                &bucket.name,
+                region.clone(),
+                creds.clone(),
+                BucketConfiguration::default(),
+            )
+            .await
+            {
+                Ok(res) if res.success() || res.response_code == 409 => {
+                    tracing::info!(bucket = %bucket.name, "created S3 bucket");
+                    return;
+                }
+                Ok(res) => tracing::warn!(status = res.response_code, "creating S3 bucket failed"),
+                Err(e) => tracing::warn!(error = %e, "creating S3 bucket failed"),
+            },
+            Err(e) => tracing::info!(attempt, error = %e, "S3 not reachable yet, retrying"),
+        }
+        tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+    }
+    tracing::warn!(bucket = %bucket.name, "could not verify S3 bucket; uploads may fail");
 }
 
 /// Supported image types, detected by magic bytes.

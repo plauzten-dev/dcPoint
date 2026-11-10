@@ -18,7 +18,7 @@ dcPoint/
 │   │   ├── routes/         REST-Handler (auth, users, guilds, channels, invites, cdn)
 │   │   ├── permissions.rs  Berechtigungs-Bitmasken, Overwrites, Hierarchie (rein, getestet)
 │   │   ├── snowflake.rs    64-bit-IDs (Zeitstempel | Worker | Sequenz), als String serialisiert
-│   │   └── storage.rs      S3 (MinIO) bzw. lokales Dateisystem für Uploads
+│   │   └── storage.rs      S3-kompatibel (SeaweedFS/MinIO) bzw. lokales Dateisystem
 │   └── tests/              Integrationstests gegen echte PostgreSQL (sqlx::test)
 ├── web/                    Frontend (React 19, TypeScript, Vite, Tailwind 4, Zustand, TanStack)
 │   ├── src/
@@ -30,7 +30,7 @@ dcPoint/
 │   └── src-tauri/          Tauri-2-Desktop-Shell
 ├── e2e/                    Playwright-E2E-Tests der Kernabläufe
 ├── deploy/                 Nginx-Konfiguration, LiveKit-Konfiguration
-└── docker-compose.yml      Postgres, Redis, MinIO, LiveKit, Server, Web
+└── docker-compose.yml      Postgres, Redis, SeaweedFS (S3), LiveKit, Server, Web
 ```
 
 ## Datenmodell (PostgreSQL)
@@ -136,6 +136,7 @@ identifiziert sich neu (vollständiger READY-Snapshot).
 | A10 | Rate-Limit für Auth-Endpunkte: feste Fenster pro IP (Standard 30/min) | Brute-Force-Schutz ohne externe Abhängigkeit |
 | A11 | Präsenz „offline“ sofort beim Trennen der letzten Verbindung | Einfach; Grace-Period kann ergänzt werden |
 | A12 | Tauri-Build braucht WebKitGTK (Linux) bzw. WebView2 (Windows); Web-Version läuft ohne | Gleiche Codebasis |
+| A13 | S3-Speicher in docker-compose ist **SeaweedFS** statt MinIO | MinIO veröffentlicht keine Images mehr auf Docker Hub; der Server spricht generisches S3 und legt den Bucket bei Bedarf selbst an |
 
 ## Phasen
 

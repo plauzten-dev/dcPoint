@@ -1,0 +1,9 @@
+{
+  "identities": [
+    {
+      "name": "dcpoint",
+      "credentials": [{ "accessKey": "dcpoint", "secretKey": "dcpoint-s3-secret-change-me" }],
+      "actions": ["Admin", "Read", "Write", "List", "Tagging"]
+    }
+  ]
+}
