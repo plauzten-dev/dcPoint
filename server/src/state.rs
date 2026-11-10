@@ -1,0 +1,59 @@
+use std::ops::Deref;
+use std::sync::Arc;
+use std::time::Duration;
+
+use sqlx::PgPool;
+
+use crate::auth::SessionCache;
+use crate::config::Config;
+use crate::gateway::hub::Hub;
+use crate::ratelimit::RateLimiter;
+use crate::snowflake::SnowflakeGen;
+use crate::storage::Storage;
+
+pub struct Inner {
+    pub db: PgPool,
+    pub cfg: Config,
+    pub hub: Hub,
+    pub storage: Storage,
+    pub ids: SnowflakeGen,
+    pub sessions: SessionCache,
+    pub auth_limiter: RateLimiter,
+}
+
+#[derive(Clone)]
+pub struct AppState(Arc<Inner>);
+
+impl Deref for AppState {
+    type Target = Inner;
+    fn deref(&self) -> &Inner {
+        &self.0
+    }
+}
+
+impl AppState {
+    pub fn new(cfg: Config, db: PgPool, storage: Storage) -> Self {
+        Self(Arc::new(Inner {
+            ids: SnowflakeGen::new(cfg.worker_id),
+            auth_limiter: RateLimiter::new(cfg.auth_rate_limit_per_min, Duration::from_secs(60)),
+            hub: Hub::default(),
+            sessions: SessionCache::default(),
+            db,
+            cfg,
+            storage,
+        }))
+    }
+
+    /// Periodic housekeeping: expired gateway sessions and rate-limit buckets.
+    pub fn spawn_background_tasks(&self) {
+        let state = self.clone();
+        tokio::spawn(async move {
+            let mut tick = tokio::time::interval(Duration::from_secs(30));
+            loop {
+                tick.tick().await;
+                state.hub.reap();
+                state.auth_limiter.prune();
+            }
+        });
+    }
+}
