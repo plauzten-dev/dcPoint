@@ -5,7 +5,7 @@ import { cn } from '../../lib/cn';
 import { copyText } from '../../lib/format';
 import { guildPath } from '../../lib/navigation';
 import { P } from '../../lib/permissions';
-import { useCan } from '../../lib/hooks';
+import { prefetchMembers, useCan } from '../../lib/hooks';
 import { confirmLeaveGuild } from '../../lib/actions';
 import { moveGuild, useData } from '../../stores/data';
 import { openModal, useOverlay } from '../../stores/overlay';
@@ -37,12 +37,20 @@ interface RailItemProps {
   idleClass?: string;
   activeClass?: string;
   testId?: string;
+  onHover?: () => void;
 }
 
-function RailItem({ label, selected, onClick, onContextMenu, children, idleClass = 'bg-chat text-text', activeClass = 'bg-brand text-white', testId }: RailItemProps) {
+function RailItem({ label, selected, onClick, onContextMenu, children, idleClass = 'bg-chat text-text', activeClass = 'bg-brand text-white', testId, onHover }: RailItemProps) {
   const [hover, setHover] = useState(false);
   return (
-    <div className="relative flex w-full justify-center" onMouseEnter={() => setHover(true)} onMouseLeave={() => setHover(false)}>
+    <div
+      className="relative flex w-full justify-center"
+      onMouseEnter={() => {
+        setHover(true);
+        onHover?.();
+      }}
+      onMouseLeave={() => setHover(false)}
+    >
       <Pill state={selected ? 'selected' : hover ? 'hover' : 'none'} />
       <Tooltip text={label} placement="right" large>
         <button
@@ -116,7 +124,14 @@ const GuildItem = memo(function GuildItem({ id, selected, index }: { id: string;
       className="relative w-full"
     >
       {drop && <div className={cn('absolute left-3 right-3 h-0.5 rounded bg-online', drop === 'above' ? '-top-1' : '-bottom-1')} />}
-      <RailItem label={guild.name} selected={selected} onClick={() => navigate(guildPath(id))} onContextMenu={menu} testId={`guild-${guild.name}`}>
+      <RailItem
+        label={guild.name}
+        selected={selected}
+        onClick={() => navigate(guildPath(id))}
+        onContextMenu={menu}
+        onHover={() => void prefetchMembers(id)}
+        testId={`guild-${guild.name}`}
+      >
         <GuildIcon guild={guild} className="!bg-transparent !text-inherit" />
       </RailItem>
     </div>

@@ -3,6 +3,7 @@ import { useMemo } from 'react';
 import { http } from '../api/client';
 import { ChannelType, type Channel, type Member } from '../api/types';
 import { useData } from '../stores/data';
+import { queryClient } from './queryClient';
 import { basePermissions, channelPermissions, has, type PermContext } from './permissions';
 
 export interface CategoryGroup {
@@ -72,10 +73,16 @@ export function useCan(guildId: string | undefined, perm: bigint): boolean {
   return has(useGuildPermissions(guildId), perm);
 }
 
+const membersQuery = (guildId: string | undefined) => ({
+  queryKey: ['members', guildId],
+  queryFn: () => http.get<Member[]>(`/guilds/${guildId}/members?limit=1000`),
+});
+
 export function useMembers(guildId: string | undefined) {
-  return useQuery({
-    queryKey: ['members', guildId],
-    queryFn: () => http.get<Member[]>(`/guilds/${guildId}/members?limit=1000`),
-    enabled: !!guildId,
-  });
+  return useQuery({ ...membersQuery(guildId), enabled: !!guildId });
+}
+
+/** Warms the member list when hovering a server so switching feels instant. */
+export function prefetchMembers(guildId: string) {
+  return queryClient.prefetchQuery(membersQuery(guildId));
 }
