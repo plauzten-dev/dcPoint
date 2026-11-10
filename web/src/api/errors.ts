@@ -1,0 +1,36 @@
+const messages: Record<string, string> = {
+  INVALID_LOGIN: 'Login oder Passwort ist ungültig.',
+  EMAIL_ALREADY_REGISTERED: 'E-Mail ist bereits registriert.',
+  EMAIL_INVALID: 'Keine gültige E-Mail-Adresse.',
+  USERNAME_TAKEN: 'Benutzername ist bereits vergeben.',
+  USERNAME_LENGTH: 'Muss zwischen 2 und 32 Zeichen lang sein.',
+  USERNAME_INVALID_CHARS: 'Nur Kleinbuchstaben, Zahlen, _ und . erlaubt.',
+  USERNAME_CONSECUTIVE_DOTS: 'Darf keine aufeinanderfolgenden Punkte enthalten.',
+  PASSWORD_TOO_SHORT: 'Muss mindestens 8 Zeichen lang sein.',
+  PASSWORD_TOO_LONG: 'Darf höchstens 128 Zeichen lang sein.',
+  PASSWORD_INCORRECT: 'Passwort ist falsch.',
+  INVALID_TOTP_CODE: 'Ungültiger Authentifizierungscode.',
+  INVALID_MFA_TICKET: 'Die Anmeldung ist abgelaufen. Bitte melde dich erneut an.',
+  MFA_ALREADY_ENABLED: '2FA ist bereits aktiviert.',
+  TOO_LONG: 'Zu lang.',
+  GUILD_NAME_LENGTH: 'Muss zwischen 2 und 100 Zeichen lang sein.',
+  CHANNEL_NAME_LENGTH: 'Muss zwischen 1 und 100 Zeichen lang sein.',
+  INVALID_PARENT: 'Ungültige Kategorie.',
+  INVALID_IMAGE: 'Ungültiges Bild. Erlaubt sind PNG, JPEG, GIF und WebP.',
+  IMAGE_TOO_LARGE: 'Das Bild ist zu groß (max. 8 MB).',
+  INVALID_COLOR: 'Ungültige Farbe.',
+  OUT_OF_RANGE: 'Wert außerhalb des erlaubten Bereichs.',
+  MISSING_PERMISSIONS: 'Dir fehlen die Berechtigungen dafür.',
+  UNKNOWN_INVITE: 'Diese Einladung ist ungültig oder abgelaufen.',
+  UNKNOWN_GUILD: 'Unbekannter Server.',
+  UNKNOWN_CHANNEL: 'Unbekannter Kanal.',
+  RATE_LIMITED: 'Zu viele Versuche. Bitte warte einen Moment.',
+  OWNER_CANNOT_LEAVE: 'Als Eigentümer kannst du den Server nicht verlassen.',
+  PAYLOAD_TOO_LARGE: 'Die Datei ist zu groß.',
+  NETWORK: 'Keine Verbindung zum Server.',
+  UNAUTHORIZED: 'Bitte melde dich erneut an.',
+};
+
+export function errorText(code: string | undefined): string {
+  return (code && messages[code]) || 'Etwas ist schiefgelaufen. Bitte versuche es erneut.';
+}

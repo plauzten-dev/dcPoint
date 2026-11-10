@@ -1,0 +1,11 @@
+# LiveKit SFU (used from phase 4). Development keys only - change for production.
+port: 7880
+rtc:
+  tcp_port: 7881
+  port_range_start: 50000
+  port_range_end: 50100
+  use_external_ip: false
+keys:
+  devkey: dcpoint-livekit-dev-secret-change-me-0123456789
+logging:
+  level: info
