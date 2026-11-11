@@ -26,7 +26,7 @@ async fn site() -> String {
         <meta property="og:description" content="Eine Vorschau">
         <meta property="og:image" content="/bild.png">
         <meta name="twitter:card" content="summary_large_image">
-        <meta name="theme-color" content="#6c5cf6"></head></html>"##
+        <meta name="theme-color" content="#6c5cf6"></head></html>"##,
     );
     let app = Router::new()
         .route(
