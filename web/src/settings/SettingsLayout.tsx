@@ -1,5 +1,6 @@
-import { useEffect, useRef, type ReactNode } from 'react';
-import { X } from 'lucide-react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { ChevronLeft, ChevronRight, X } from 'lucide-react';
+import { useIsMobile } from '../lib/mobile';
 import { cn } from '../lib/cn';
 import { Button } from '../components/ui/Button';
 
@@ -19,14 +20,72 @@ interface Props {
   onClose: () => void;
   children: ReactNode;
   footer?: ReactNode;
+  /** Phones: open directly on the content instead of the section list. */
+  mobileStartInContent?: boolean;
 }
 
 /** Fullscreen settings layer: sidebar navigation left, content right, ESC button. */
-export function SettingsLayout({ nav, active, onSelect, onClose, children, footer }: Props) {
+export function SettingsLayout({ nav, active, onSelect, onClose, children, footer, mobileStartInContent }: Props) {
   const contentRef = useRef<HTMLDivElement>(null);
+  const mobile = useIsMobile();
+  const [mobileView, setMobileView] = useState<'menu' | 'content'>(mobileStartInContent ? 'content' : 'menu');
   useEffect(() => {
     contentRef.current?.scrollTo(0, 0);
-  }, [active]);
+  }, [active, mobileView]);
+
+  if (mobile) {
+    const current = nav.find((n) => n.id === active && !n.header && !n.separator);
+    const inContent = mobileView === 'content';
+    return (
+      <div className="fixed inset-0 z-[100] flex animate-settings-in flex-col bg-chat" role="dialog" aria-modal="true" aria-label="Einstellungen">
+        <header className="flex h-12 shrink-0 items-center gap-1 border-b border-divider bg-sidebar px-1">
+          {inContent && (
+            <button aria-label="Zurück" onClick={() => setMobileView('menu')} className="flex p-2 text-icon">
+              <ChevronLeft size={24} />
+            </button>
+          )}
+          <h2 className={cn('flex-1 truncate text-base font-semibold text-header', !inContent && 'pl-3')}>{inContent ? current?.label : 'Einstellungen'}</h2>
+          <button aria-label="Schließen" onClick={onClose} className="flex p-2 text-icon">
+            <X size={24} />
+          </button>
+        </header>
+        {inContent ? (
+          <div ref={contentRef} className="scroller-auto flex-1 px-4 pb-[max(40px,env(safe-area-inset-bottom))] pt-5">
+            {children}
+          </div>
+        ) : (
+          <nav className="scroller-auto flex-1 bg-sidebar px-3 pb-[max(24px,env(safe-area-inset-bottom))] pt-3">
+            {nav.map((n) =>
+              n.separator ? (
+                <div key={n.id} className="mx-2 my-3 h-px bg-divider" />
+              ) : n.header ? (
+                <h3 key={n.id} className="px-2 pb-2 pt-3 text-xs font-bold uppercase tracking-wide text-muted">
+                  {n.label}
+                </h3>
+              ) : (
+                <button
+                  key={n.id}
+                  onClick={() => {
+                    if (n.onClick) n.onClick();
+                    else {
+                      onSelect(n.id);
+                      setMobileView('content');
+                    }
+                  }}
+                  className={cn('flex h-12 w-full items-center justify-between rounded-lg px-3 text-left text-base font-medium active:bg-hover', n.danger ? 'text-[#f23f43]' : 'text-header')}
+                >
+                  {n.label}
+                  {!n.danger && <ChevronRight size={20} className="text-icon-muted" />}
+                </button>
+              ),
+            )}
+            {footer && <div className="px-3 pt-4 text-xs text-muted">{footer}</div>}
+          </nav>
+        )}
+      </div>
+    );
+  }
+
   return (
     <div className="fixed inset-0 z-[100] flex animate-settings-in bg-chat" role="dialog" aria-modal="true" aria-label="Einstellungen">
       <div className="scroller-thin flex flex-[1_0_218px] justify-end bg-sidebar">

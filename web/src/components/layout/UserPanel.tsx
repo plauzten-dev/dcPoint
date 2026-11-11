@@ -113,7 +113,7 @@ export function UserPanel() {
   if (!me) return null;
   const sub = me.custom_status?.text || statusLabel[me.status];
   return (
-    <section aria-label="Benutzerbereich" className="flex h-[52px] shrink-0 items-center gap-2 bg-panel px-2">
+    <section aria-label="Benutzerbereich" className="box-content flex h-[52px] shrink-0 items-center gap-2 bg-panel px-2 pb-[env(safe-area-inset-bottom)]">
       <button
         data-testid="user-panel"
         onClick={(e) => setAnchor(anchor ? null : e.currentTarget.getBoundingClientRect())}

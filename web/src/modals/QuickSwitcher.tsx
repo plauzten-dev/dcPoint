@@ -4,6 +4,7 @@ import { Hash, Volume2 } from 'lucide-react';
 import { ChannelType } from '../api/types';
 import { GuildIcon } from '../components/GuildIcon';
 import { cn } from '../lib/cn';
+import { showChat } from '../lib/mobile';
 import { guildPath } from '../lib/navigation';
 import { useData } from '../stores/data';
 import { toast } from '../stores/overlay';
@@ -64,7 +65,10 @@ export default function QuickSwitcher({ onClose }: { onClose: () => void }) {
     onClose();
     if (r.kind === 'guild') navigate(guildPath(r.id));
     else if (r.voice) toast('Sprachkanäle werden in Phase 4 freigeschaltet.');
-    else navigate(`/channels/${r.guildId}/${r.id}`);
+    else {
+      navigate(`/channels/${r.guildId}/${r.id}`);
+      showChat();
+    }
   };
 
   const move = (delta: number) => {

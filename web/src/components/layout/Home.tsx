@@ -1,4 +1,6 @@
-import { Compass, Plus, Users } from 'lucide-react';
+import { Compass, Menu, Plus, Users } from 'lucide-react';
+import { showChat, showNav } from '../../lib/mobile';
+import { cn } from '../../lib/cn';
 import { openModal } from '../../stores/overlay';
 import { Button } from '../ui/Button';
 import { Tooltip } from '../ui/Tooltip';
@@ -6,7 +8,7 @@ import { UserPanel } from './UserPanel';
 
 export function HomeSidebar() {
   return (
-    <div className="flex w-60 shrink-0 flex-col bg-sidebar">
+    <div className="flex w-60 shrink-0 flex-col bg-sidebar max-md:w-auto max-md:min-w-0 max-md:flex-1">
       <div className="flex h-12 shrink-0 items-center px-2.5 shadow-[0_1px_0_rgb(4_4_5/0.2),0_1.5px_0_rgb(6_6_7/0.05),0_2px_0_rgb(4_4_5/0.05)]">
         <button
           onClick={() => openModal({ type: 'quickSwitcher' })}
@@ -16,10 +18,10 @@ export function HomeSidebar() {
         </button>
       </div>
       <nav className="scroller-thin flex-1 px-2 pt-2">
-        <div aria-current="page" className="flex h-[42px] items-center gap-3 rounded bg-selected px-2 text-header">
+        <button aria-current="page" onClick={showChat} className="flex h-[42px] w-full items-center gap-3 rounded bg-selected px-2 text-header">
           <Users size={22} />
           <span className="text-base font-medium">Freunde</span>
-        </div>
+        </button>
         <div className="mt-4 flex items-center justify-between px-2 pb-1 text-xs font-semibold uppercase tracking-wide text-muted">
           <span>Direktnachrichten</span>
           <Tooltip text="DM erstellen">
@@ -39,13 +41,16 @@ export function HomeMain() {
   return (
     <main className="flex min-w-0 flex-1 flex-col bg-chat">
       <header className="flex h-12 shrink-0 items-center gap-4 px-4 shadow-[0_1px_0_rgb(4_4_5/0.2),0_1.5px_0_rgb(6_6_7/0.05),0_2px_0_rgb(4_4_5/0.05)]">
+        <button aria-label="Server und Kanäle anzeigen" onClick={showNav} className="-mr-2 flex p-1 text-icon md:hidden">
+          <Menu size={24} />
+        </button>
         <div className="flex items-center gap-2 font-semibold text-header">
           <Users size={22} className="text-icon-muted" />
           Freunde
         </div>
-        <div className="h-6 w-px bg-divider" />
+        <div className="h-6 w-px bg-divider max-md:hidden" />
         {['Online', 'Alle', 'Ausstehend', 'Blockiert'].map((t, i) => (
-          <span key={t} className={i === 0 ? 'rounded bg-selected px-2 py-0.5 font-medium text-header' : 'px-2 py-0.5 font-medium text-muted'}>
+          <span key={t} className={cn('max-md:hidden', i === 0 ? 'rounded bg-selected px-2 py-0.5 font-medium text-header' : 'px-2 py-0.5 font-medium text-muted')}>
             {t}
           </span>
         ))}
@@ -60,7 +65,7 @@ export function HomeMain() {
         </svg>
         <h2 className="text-lg font-semibold text-header">Hier ist es noch ruhig</h2>
         <p className="mt-2 max-w-md text-sm text-muted">Erstelle deinen eigenen Server oder tritt mit einer Einladung bei. Freundesliste und DMs folgen in Phase 3.</p>
-        <div className="mt-6 flex gap-3">
+        <div className="mt-6 flex flex-wrap justify-center gap-3">
           <Button onClick={() => openModal({ type: 'createGuild' })}>
             <Plus size={16} /> Server erstellen
           </Button>

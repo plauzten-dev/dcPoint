@@ -7,6 +7,7 @@ import { Button } from '../components/ui/Button';
 import { useData } from '../stores/data';
 import { AuthLayout } from './AuthLayout';
 import { displayName } from '../lib/cdn';
+import { showChat } from '../lib/mobile';
 import { firstTextChannel } from '../lib/navigation';
 
 export default function InvitePage() {
@@ -19,6 +20,7 @@ export default function InvitePage() {
     onSuccess: (g) => {
       useData.getState().upsertGuild(g);
       navigate(`/channels/${g.id}/${firstTextChannel(g.id) ?? ''}`, { replace: true });
+      showChat();
     },
   });
 

@@ -216,11 +216,11 @@ function AccountSection({ goProfiles }: { goProfiles: () => void }) {
           className="h-[100px] bg-cover bg-center"
           style={banner ? { backgroundImage: `url(${banner})` } : { background: me.accent_color !== null ? colorToHex(me.accent_color) : defaultAvatarColor(me.id) }}
         />
-        <div className="flex items-end gap-4 px-4">
+        <div className="flex flex-wrap items-end gap-x-4 px-4">
           <div className="-mt-10 rounded-full bg-panel p-1.5">
             <Avatar user={me} size={80} status={me.status} ring="var(--panel)" />
           </div>
-          <div className="mb-2 flex-1 text-xl font-semibold text-header">{displayName(me)}</div>
+          <div className="mb-2 min-w-0 flex-1 truncate text-xl font-semibold text-header">{displayName(me)}</div>
           <Button size="sm" className="mb-3" onClick={goProfiles}>
             Benutzerprofil bearbeiten
           </Button>
@@ -387,7 +387,7 @@ function ProfilesSection() {
             </div>
           </div>
         </div>
-        <div className="w-[300px] shrink-0">
+        <div className="w-[300px] max-w-full shrink-0">
           <Label>Vorschau</Label>
           <div className="overflow-hidden rounded-lg bg-floating shadow-elevation">
             <PreviewCard user={preview} avatar={previewAvatar} banner={previewBanner} status={me.status} />

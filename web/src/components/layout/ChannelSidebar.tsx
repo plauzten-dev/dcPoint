@@ -7,6 +7,7 @@ import { confirmDeleteChannel, confirmLeaveGuild, reportError } from '../../lib/
 import { cn } from '../../lib/cn';
 import { copyText } from '../../lib/format';
 import { useChannelPermissions, useChannelTree, useGuildPermissions, type CategoryGroup } from '../../lib/hooks';
+import { showChat } from '../../lib/mobile';
 import { has, P } from '../../lib/permissions';
 import { useData } from '../../stores/data';
 import { openModal, toast, useOverlay } from '../../stores/overlay';
@@ -147,7 +148,10 @@ const ChannelItem = memo(function ChannelItem({ channel, selected }: { channel: 
 
   const open = () => {
     if (voice) toast('Sprachkanäle werden in Phase 4 freigeschaltet.');
-    else navigate(`/channels/${channel.guild_id}/${channel.id}`);
+    else {
+      navigate(`/channels/${channel.guild_id}/${channel.id}`);
+      showChat();
+    }
   };
   const menu = (e: MouseEvent) => {
     e.preventDefault();
@@ -374,7 +378,7 @@ export function ChannelSidebar({ guildId }: { guildId: string }) {
   };
 
   return (
-    <div className="flex w-60 shrink-0 flex-col bg-sidebar">
+    <div className="flex w-60 shrink-0 flex-col bg-sidebar max-md:w-auto max-md:min-w-0 max-md:flex-1">
       <GuildHeader guildId={guildId} />
       <DragCtx.Provider value={ctx}>
         <nav aria-label="Kanäle" className="scroller-thin flex-1 pb-4" onContextMenu={sidebarMenu}>

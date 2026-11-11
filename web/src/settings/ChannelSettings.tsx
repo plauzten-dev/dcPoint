@@ -24,7 +24,7 @@ export default function ChannelSettings({ onClose, channelId }: { onClose: () =>
     { id: 'delete', label: category ? 'Kategorie löschen' : 'Kanal löschen', danger: true, onClick: () => confirmDeleteChannel(channel.id, navigate) },
   ];
   return (
-    <SettingsLayout nav={nav} active="overview" onSelect={() => {}} onClose={onClose}>
+    <SettingsLayout nav={nav} active="overview" onSelect={() => {}} onClose={onClose} mobileStartInContent>
       <Overview channel={channel} />
     </SettingsLayout>
   );

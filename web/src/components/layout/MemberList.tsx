@@ -73,7 +73,7 @@ const MemberRow = memo(function MemberRow({ member, online, guildId, onOpen }: {
       onClick={(e) => onOpen(member, e.currentTarget.getBoundingClientRect())}
       onContextMenu={menu}
       data-testid={`member-${member.user.username}`}
-      className={cn('group ml-2 flex h-[42px] w-[224px] items-center gap-3 rounded px-2 text-left hover:bg-hover', !online && 'opacity-30 hover:opacity-100')}
+      className={cn('group ml-2 flex h-[42px] w-[calc(100%-16px)] items-center gap-3 rounded px-2 text-left hover:bg-hover', !online && 'opacity-30 hover:opacity-100')}
     >
       <Avatar user={member.user} size={32} status={online ? presence?.status ?? 'online' : null} ring="var(--sidebar)" />
       <span className="min-w-0 flex-1 leading-tight">
@@ -111,7 +111,7 @@ export function MemberList({ guildId }: { guildId: string }) {
   const memberRoles = profile && roles ? profile.member.roles.map((id) => roles[id]).filter(Boolean).sort((a, b) => b.position - a.position) : [];
 
   return (
-    <aside aria-label="Mitglieder" className="flex w-60 shrink-0 flex-col bg-sidebar">
+    <aside aria-label="Mitglieder" className="flex w-60 shrink-0 flex-col bg-sidebar max-md:w-full">
       <div ref={scrollRef} className="scroller-thin flex-1 pb-5">
         {isPending ? (
           <div className="space-y-3 px-4 pt-6">

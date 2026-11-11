@@ -1,6 +1,7 @@
 import { useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { cn } from '../../lib/cn';
+import { isTouchDevice } from '../../lib/mobile';
 
 type Placement = 'right' | 'top' | 'bottom' | 'left';
 
@@ -21,7 +22,7 @@ export function Tooltip({ text, placement = 'top', children, className, large, d
     <div
       ref={ref}
       className={className}
-      onMouseEnter={() => !disabled && setRect(ref.current!.getBoundingClientRect())}
+      onMouseEnter={() => !disabled && !isTouchDevice && setRect(ref.current!.getBoundingClientRect())}
       onMouseLeave={() => setRect(null)}
       onMouseDown={() => setRect(null)}
     >

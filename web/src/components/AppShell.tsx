@@ -4,6 +4,7 @@ import { auth } from '../api/client';
 import { gateway } from '../api/gateway';
 import { ChannelType } from '../api/types';
 import { useChannel } from '../lib/hooks';
+import { useIsMobile } from '../lib/mobile';
 import { defaultChannel } from '../lib/navigation';
 import { endSession, startSession } from '../lib/session';
 import { useGlobalShortcuts } from '../lib/shortcuts';
@@ -14,6 +15,7 @@ import { ChatArea, NoChannel } from './layout/ChatArea';
 import { GuildBar } from './layout/GuildBar';
 import { HomeMain, HomeSidebar } from './layout/Home';
 import { MemberList } from './layout/MemberList';
+import { MobileShell } from './layout/MobileShell';
 import { ModalHost, preloadModals } from './ModalHost';
 import { ContextMenuHost } from './ui/ContextMenu';
 import { LogoMark } from './ui/Logo';
@@ -51,6 +53,7 @@ export default function AppShell() {
   const location = useLocation();
   const navigate = useNavigate();
   const me = useData((s) => s.me);
+  const mobile = useIsMobile();
   useGlobalShortcuts(navigate);
 
   useEffect(() => {
@@ -72,7 +75,7 @@ export default function AppShell() {
   return (
     <div className="relative flex h-full">
       <ReconnectBanner />
-      <GuildBar />
+      {!mobile && <GuildBar />}
       <Outlet />
       <ModalHost />
       <ContextMenuHost />
@@ -82,6 +85,20 @@ export default function AppShell() {
 }
 
 export function HomeView() {
+  const mobile = useIsMobile();
+  if (mobile) {
+    return (
+      <MobileShell
+        nav={
+          <>
+            <GuildBar />
+            <HomeSidebar />
+          </>
+        }
+        chat={<HomeMain />}
+      />
+    );
+  }
   return (
     <>
       <HomeSidebar />
@@ -95,6 +112,7 @@ export function GuildView() {
   const guild = useData((s) => s.guilds[guildId]);
   const channel = useChannel(channelId);
   const memberListOpen = useUi((s) => s.memberListOpen);
+  const mobile = useIsMobile();
   const setLastChannel = useUi((s) => s.setLastChannel);
   const valid = !!channel && channel.guild_id === guildId && channel.type === ChannelType.GuildText;
 
@@ -106,6 +124,20 @@ export function GuildView() {
   if (!valid) {
     const fallback = defaultChannel(guildId);
     if (fallback && fallback !== channelId) return <Navigate to={`/channels/${guildId}/${fallback}`} replace />;
+  }
+  if (mobile) {
+    return (
+      <MobileShell
+        nav={
+          <>
+            <GuildBar />
+            <ChannelSidebar guildId={guildId} />
+          </>
+        }
+        chat={valid ? <ChatArea key={channel.id} channel={channel} /> : <NoChannel />}
+        members={valid ? <MemberList guildId={guildId} /> : undefined}
+      />
+    );
   }
   return (
     <>

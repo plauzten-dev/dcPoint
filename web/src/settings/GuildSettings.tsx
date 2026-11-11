@@ -58,7 +58,7 @@ function Overview({ guildId }: { guildId: string }) {
   return (
     <>
       <SectionTitle>Serverübersicht</SectionTitle>
-      <div className="flex gap-8 max-md:flex-col">
+      <div className="flex gap-8 max-md:flex-col max-md:gap-5">
         <div className="flex gap-4">
           <div className="relative">
             {draft.icon ? <img src={draft.icon} alt="" className="size-[100px] rounded-full object-cover" /> : <GuildIcon guild={iconPreview} size={100} className="rounded-full text-3xl" />}
@@ -103,6 +103,8 @@ function Invites({ guildId }: { guildId: string }) {
     <>
       <SectionTitle>Einladungen</SectionTitle>
       <p className="mb-5 text-sm text-muted">Hier siehst du alle aktiven Einladungslinks. Du kannst sie jederzeit widerrufen.</p>
+      <div className="overflow-x-auto">
+      <div className="min-w-[520px]">
       <div className="grid grid-cols-[1fr_120px_100px_120px_32px] gap-x-2 border-b border-divider pb-2 text-xs font-bold uppercase text-header-2">
         <span>Einladender</span>
         <span>Code</span>
@@ -124,11 +126,17 @@ function Invites({ guildId }: { guildId: string }) {
             {i.max_uses ? ` / ${i.max_uses}` : ''}
           </span>
           <span>{i.expires_at ? formatDate(i.expires_at) : '∞'}</span>
-          <button aria-label="Einladung widerrufen" onClick={() => revoke.mutate(i.code)} className="invisible flex size-6 items-center justify-center rounded-full bg-danger text-white group-hover:visible">
+          <button
+            aria-label="Einladung widerrufen"
+            onClick={() => revoke.mutate(i.code)}
+            className="invisible flex size-6 items-center justify-center rounded-full bg-danger text-white group-hover:visible [@media(hover:none)]:visible"
+          >
             <X size={14} />
           </button>
         </div>
       ))}
+      </div>
+      </div>
     </>
   );
 }

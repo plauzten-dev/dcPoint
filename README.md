@@ -58,6 +58,14 @@ Für den Produktivbetrieb unbedingt `SECRET_KEY` (≥ 32 Zeichen), die S3-Zugang
 (`deploy/seaweedfs-s3.json` und `docker-compose.yml`) und die
 LiveKit-Schlüssel in `deploy/livekit.yaml` ändern.
 
+### Am Handy nutzen
+
+Handy und Rechner müssen im selben WLAN sein. Die IP-Adresse des Rechners ermitteln
+(macOS: `ipconfig getifaddr en0`) und am Handy `http://<IP>:8000` öffnen. Auf schmalen
+Bildschirmen schaltet dcPoint auf eine eigene Handy-Ansicht um: Kanal antippen öffnet den
+Chat, ☰ oder Wischen nach rechts führt zurück, langes Drücken öffnet Kontextmenüs. Über
+„Teilen → Zum Home-Bildschirm“ lässt sich die App wie eine native App starten.
+
 ## Entwicklung ohne Docker
 
 Voraussetzungen: Rust ≥ 1.85, Node.js 22, PostgreSQL 16.
