@@ -645,3 +645,149 @@ async fn custom_emojis(pool: PgPool) {
     let (s, _, _) = raw_get(app, &format!("/cdn/emojis/{id}")).await;
     assert_eq!(s, StatusCode::NOT_FOUND);
 }
+
+#[sqlx::test(migrations = "./migrations")]
+async fn threads(pool: PgPool) {
+    let c = setup(pool).await;
+    let app = &c.app;
+    let (_, starter) = send(
+        app,
+        &c.owner,
+        &c.general,
+        json!({ "content": "Diskussion?" }),
+    )
+    .await;
+    let sid = starter["id"].as_str().unwrap();
+
+    // members may create public threads by default
+    let (s, thread) = app
+        .post(
+            &format!("/channels/{}/threads", c.general),
+            &c.member,
+            json!({ "name": "Ideen", "message_id": sid }),
+        )
+        .await;
+    assert_eq!(s, StatusCode::CREATED, "{thread}");
+    assert_eq!(thread["type"], 11);
+    assert_eq!(thread["parent_id"], c.general.as_str());
+    let tid = thread["id"].as_str().unwrap().to_owned();
+    let (s, body) = app
+        .post(
+            &format!("/channels/{}/threads", c.general),
+            &c.owner,
+            json!({ "name": "Doppelt", "message_id": sid }),
+        )
+        .await;
+    assert_eq!(s, StatusCode::BAD_REQUEST);
+    assert_eq!(body["code"], "THREAD_ALREADY_EXISTS");
+
+    // messages inside the thread
+    let (s, _) = send(app, &c.owner, &tid, json!({ "content": "Erste Antwort" })).await;
+    assert_eq!(s, StatusCode::CREATED);
+    let (_, list) = app
+        .get(&format!("/channels/{}/messages", c.general), &c.member)
+        .await;
+    let st = list
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|m| m["id"] == sid)
+        .unwrap()
+        .clone();
+    assert_eq!(st["thread"]["id"], tid.as_str());
+    assert_eq!(st["thread"]["message_count"], 1);
+    let (_, threads) = app
+        .get(&format!("/channels/{}/threads", c.general), &c.member)
+        .await;
+    assert_eq!(threads.as_array().unwrap().len(), 1);
+
+    // only the thread owner (or MANAGE_THREADS) may archive
+    let (_, other) = app
+        .post(
+            &format!("/channels/{}/threads", c.general),
+            &c.owner,
+            json!({ "name": "Vom Owner" }),
+        )
+        .await;
+    let other_id = other["id"].as_str().unwrap();
+    let (s, _) = app
+        .patch(
+            &format!("/channels/{other_id}"),
+            &c.member,
+            json!({ "archived": true }),
+        )
+        .await;
+    assert_eq!(s, StatusCode::FORBIDDEN);
+    let (s, arch) = app
+        .patch(
+            &format!("/channels/{tid}"),
+            &c.member,
+            json!({ "archived": true, "name": "Ideen (erledigt)" }),
+        )
+        .await;
+    assert_eq!(s, StatusCode::OK);
+    assert_eq!(arch["archived"], true);
+    let (_, g) = app.get(&format!("/guilds/{}", c.gid), &c.member).await;
+    assert!(
+        g["channels"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .all(|ch| ch["id"] != tid.as_str()),
+        "archived threads are not in the payload"
+    );
+    // new activity revives the thread
+    send(app, &c.member, &tid, json!({ "content": "doch noch was" })).await;
+    let (_, t) = app.get(&format!("/channels/{tid}"), &c.member).await;
+    assert_eq!(t["archived"], false);
+    assert_eq!(t["message_count"], 2);
+    // threads cannot be moved by drag & drop
+    let (s, _) = app
+        .patch(
+            &format!("/guilds/{}/channels", c.gid),
+            &c.owner,
+            json!([{ "id": tid, "position": 0 }]),
+        )
+        .await;
+    assert_eq!(s, StatusCode::BAD_REQUEST);
+
+    // threads in private channels are private too
+    let (_, secret) = app
+        .post(
+            &format!("/guilds/{}/channels", c.gid),
+            &c.owner,
+            json!({ "name": "geheim", "private": true }),
+        )
+        .await;
+    let secret_id = secret["id"].as_str().unwrap();
+    let (_, hidden) = app
+        .post(
+            &format!("/channels/{secret_id}/threads"),
+            &c.owner,
+            json!({ "name": "intern" }),
+        )
+        .await;
+    let (s, _) = app
+        .get(
+            &format!("/channels/{}", hidden["id"].as_str().unwrap()),
+            &c.member,
+        )
+        .await;
+    assert_eq!(s, StatusCode::NOT_FOUND);
+    let (s, _) = send(
+        app,
+        &c.member,
+        hidden["id"].as_str().unwrap(),
+        json!({ "content": "rein?" }),
+    )
+    .await;
+    assert_eq!(s, StatusCode::NOT_FOUND);
+
+    // deleting the parent removes its threads
+    let (s, _) = app
+        .delete(&format!("/channels/{}", c.general), &c.owner)
+        .await;
+    assert_eq!(s, StatusCode::OK);
+    let (s, _) = app.get(&format!("/channels/{tid}"), &c.owner).await;
+    assert_eq!(s, StatusCode::NOT_FOUND);
+}

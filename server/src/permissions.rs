@@ -111,6 +111,7 @@ pub mod channel_type {
     pub const GUILD_VOICE: i16 = 2;
     pub const GROUP_DM: i16 = 3;
     pub const GUILD_CATEGORY: i16 = 4;
+    pub const PUBLIC_THREAD: i16 = 11;
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -238,8 +239,16 @@ fn finalize(mut perms: u64, channel_type: i16) -> u64 {
         return 0;
     }
     match channel_type {
-        channel_type::GUILD_TEXT => {
+        channel_type::GUILD_TEXT | channel_type::PUBLIC_THREAD => {
             perms &= !VOICE_ONLY;
+            // In threads, sending is governed by SEND_MESSAGES_IN_THREADS.
+            if channel_type == channel_type::PUBLIC_THREAD {
+                if perms & SEND_MESSAGES_IN_THREADS != 0 {
+                    perms |= SEND_MESSAGES;
+                } else {
+                    perms &= !SEND_MESSAGES;
+                }
+            }
             if perms & SEND_MESSAGES == 0 {
                 perms &= !(SEND_TTS_MESSAGES | MENTION_EVERYONE | ATTACH_FILES | EMBED_LINKS);
             }
@@ -507,6 +516,29 @@ mod tests {
         let mut a = ctx(USER, &r, &[ADMIN_ROLE]);
         a.timed_out = true;
         assert_eq!(a.base(), ALL);
+    }
+
+    #[test]
+    fn threads_use_send_messages_in_threads() {
+        let r = vec![RoleInfo {
+            id: G,
+            permissions: DEFAULT_EVERYONE & !SEND_MESSAGES,
+            position: 0,
+        }];
+        let c = ctx(USER, &r, &[]);
+        let p = c.channel(&[], PUBLIC_THREAD);
+        assert!(
+            has(p, SEND_MESSAGES),
+            "SEND_MESSAGES_IN_THREADS grants sending in threads"
+        );
+        assert_eq!(c.channel(&[], GUILD_TEXT) & SEND_MESSAGES, 0);
+        let ow = [Overwrite {
+            target_id: G,
+            kind: OVERWRITE_ROLE,
+            allow: SEND_MESSAGES,
+            deny: SEND_MESSAGES_IN_THREADS,
+        }];
+        assert!(!has(c.channel(&ow, PUBLIC_THREAD), SEND_MESSAGES));
     }
 
     #[test]

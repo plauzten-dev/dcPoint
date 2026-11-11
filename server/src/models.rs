@@ -203,6 +203,10 @@ pub struct Channel {
     pub user_limit: Option<i32>,
     pub rate_limit_per_user: i32,
     pub last_message_id: Option<Id>,
+    pub owner_id: Option<Id>,
+    pub thread_message_id: Option<Id>,
+    pub archived: bool,
+    pub message_count: i32,
     #[sqlx(skip)]
     pub permission_overwrites: Vec<Overwrite>,
 }
@@ -409,6 +413,16 @@ pub struct ReferencedMessage {
     pub has_attachments: bool,
 }
 
+#[derive(Clone, Debug, Serialize, FromRow)]
+pub struct ThreadInfo {
+    pub id: Id,
+    pub name: String,
+    pub message_count: i32,
+    pub archived: bool,
+    #[serde(skip)]
+    pub thread_message_id: Option<Id>,
+}
+
 #[derive(Clone, Debug, Serialize)]
 pub struct Message {
     pub id: Id,
@@ -431,6 +445,8 @@ pub struct Message {
     pub reactions: Option<Vec<ReactionCount>>,
     pub reply_to_id: Option<Id>,
     pub referenced_message: Option<ReferencedMessage>,
+    /// Thread started from this message.
+    pub thread: Option<ThreadInfo>,
     pub flags: i32,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub nonce: Option<String>,

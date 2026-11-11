@@ -155,14 +155,31 @@ impl AppState {
                 .fetch_all(db)
                 .await?;
         let mut channels: Vec<Channel> =
-            sqlx::query_as("SELECT * FROM channels WHERE guild_id = ANY($1) ORDER BY position, id")
+            sqlx::query_as("SELECT * FROM channels WHERE guild_id = ANY($1) AND NOT (type = 11 AND archived) ORDER BY position, id")
                 .bind(&ids)
                 .fetch_all(db)
                 .await?;
         let channel_ids: Vec<i64> = channels.iter().map(|c| c.id.0).collect();
         let mut overwrites = load_overwrites(db, &channel_ids).await?;
         for c in &mut channels {
-            c.permission_overwrites = overwrites.remove(&c.id).unwrap_or_default();
+            if c.kind != permissions::channel_type::PUBLIC_THREAD {
+                c.permission_overwrites = overwrites.remove(&c.id).unwrap_or_default();
+            }
+        }
+        // Threads inherit the overwrites of their parent channel.
+        let parents: HashMap<Id, Vec<crate::models::Overwrite>> = channels
+            .iter()
+            .filter(|c| c.kind != permissions::channel_type::PUBLIC_THREAD)
+            .map(|c| (c.id, c.permission_overwrites.clone()))
+            .collect();
+        for c in channels
+            .iter_mut()
+            .filter(|c| c.kind == permissions::channel_type::PUBLIC_THREAD)
+        {
+            c.permission_overwrites = c
+                .parent_id
+                .and_then(|p| parents.get(&p).cloned())
+                .unwrap_or_default();
         }
         type MineRow = (Id, DateTime<Utc>, Option<DateTime<Utc>>, Option<Vec<i64>>);
         let mine: Vec<MineRow> = sqlx::query_as(

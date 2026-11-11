@@ -183,6 +183,8 @@ pub struct UpdateChannel {
     user_limit: Option<i32>,
     bitrate: Option<i32>,
     rate_limit_per_user: Option<i32>,
+    /// Threads only.
+    archived: Option<bool>,
 }
 
 pub async fn update(
@@ -192,11 +194,25 @@ pub async fn update(
     ApiJson(body): ApiJson<UpdateChannel>,
 ) -> ApiResult<Json<Channel>> {
     let (mut channel, access) = channel_access(&state.db, channel_id, auth.user_id).await?;
-    access.require_channel(&channel, permissions::MANAGE_CHANNELS)?;
+    let thread = channel.kind == channel_type::PUBLIC_THREAD;
+    if thread {
+        // Thread owners may rename/archive their own threads.
+        if channel.owner_id != Some(auth.user_id) {
+            access.require_channel(&channel, permissions::MANAGE_THREADS)?;
+        }
+    } else {
+        access.require_channel(&channel, permissions::MANAGE_CHANNELS)?;
+    }
     let mut errors = FieldErrors::new();
     if let Some(name) = body.name {
-        channel.name =
-            validation::channel_name(&mut errors, &name, channel.kind == channel_type::GUILD_TEXT);
+        channel.name = if thread {
+            thread_name(&mut errors, &name)
+        } else {
+            validation::channel_name(&mut errors, &name, channel.kind == channel_type::GUILD_TEXT)
+        };
+    }
+    if let (true, Some(archived)) = (thread, body.archived) {
+        channel.archived = archived;
     }
     if let Some(topic) = body.topic {
         channel.topic = topic.and_then(|t| validation::text(&mut errors, "topic", &t, 1024));
@@ -228,7 +244,8 @@ pub async fn update(
         return Err(ApiError::Validation(errors));
     }
     sqlx::query(
-        "UPDATE channels SET name = $2, topic = $3, nsfw = $4, user_limit = $5, bitrate = $6, rate_limit_per_user = $7 WHERE id = $1",
+        "UPDATE channels SET name = $2, topic = $3, nsfw = $4, user_limit = $5, bitrate = $6, rate_limit_per_user = $7,
+                archived = $8 WHERE id = $1",
     )
     .bind(channel.id)
     .bind(&channel.name)
@@ -237,6 +254,7 @@ pub async fn update(
     .bind(channel.user_limit)
     .bind(channel.bitrate)
     .bind(channel.rate_limit_per_user)
+    .bind(channel.archived)
     .execute(&state.db)
     .await?;
     state
@@ -245,14 +263,137 @@ pub async fn update(
     Ok(Json(channel))
 }
 
+fn thread_name(errors: &mut FieldErrors, v: &str) -> String {
+    let name = v.trim().to_owned();
+    if !(1..=100).contains(&name.chars().count()) {
+        errors.insert("name", "CHANNEL_NAME_LENGTH");
+    }
+    name
+}
+
+#[derive(Deserialize)]
+pub struct CreateThread {
+    name: String,
+    /// Starter message (optional).
+    message_id: Option<Id>,
+}
+
+/// Creates a thread below a text channel, optionally attached to a message.
+pub async fn create_thread(
+    State(state): State<AppState>,
+    auth: AuthUser,
+    ApiPath(parent_id): ApiPath<Id>,
+    ApiJson(body): ApiJson<CreateThread>,
+) -> ApiResult<(StatusCode, Json<Channel>)> {
+    let (parent, access) = channel_access(&state.db, parent_id, auth.user_id).await?;
+    if parent.kind != channel_type::GUILD_TEXT {
+        return Err(ApiError::BadRequest("THREADS_NOT_ALLOWED"));
+    }
+    access.require_channel(
+        &parent,
+        permissions::CREATE_PUBLIC_THREADS | permissions::READ_MESSAGE_HISTORY,
+    )?;
+    let mut errors = FieldErrors::new();
+    let name = thread_name(&mut errors, &body.name);
+    if !errors.is_empty() {
+        return Err(ApiError::Validation(errors));
+    }
+    if let Some(mid) = body.message_id {
+        let exists: bool = sqlx::query_scalar(
+            "SELECT EXISTS (SELECT 1 FROM messages WHERE id = $1 AND channel_id = $2)",
+        )
+        .bind(mid)
+        .bind(parent_id)
+        .fetch_one(&state.db)
+        .await?;
+        if !exists {
+            return Err(ApiError::field("message_id", "UNKNOWN_MESSAGE"));
+        }
+    }
+    let id = state.ids.next();
+    let mut thread: Channel = sqlx::query_as(
+        "INSERT INTO channels (id, guild_id, type, name, parent_id, owner_id, thread_message_id)
+         VALUES ($1, $2, 11, $3, $4, $5, $6) RETURNING *",
+    )
+    .bind(id)
+    .bind(parent.guild_id)
+    .bind(&name)
+    .bind(parent_id)
+    .bind(auth.user_id)
+    .bind(body.message_id)
+    .fetch_one(&state.db)
+    .await
+    .map_err(|e| {
+        if crate::error::is_unique_violation(&e, "channels_thread_message_id_key") {
+            ApiError::BadRequest("THREAD_ALREADY_EXISTS")
+        } else {
+            e.into()
+        }
+    })?;
+    thread.permission_overwrites = parent.permission_overwrites.clone();
+    state
+        .dispatch_channel(&thread, events::CHANNEL_CREATE)
+        .await?;
+    if let Some(mid) = body.message_id {
+        let row: crate::models::MessageRow = sqlx::query_as("SELECT * FROM messages WHERE id = $1")
+            .bind(mid)
+            .fetch_one(&state.db)
+            .await?;
+        if let Some(m) =
+            super::messages::hydrate(&state, vec![row], parent.guild_id, auth.user_id, false)
+                .await?
+                .pop()
+        {
+            state
+                .dispatch_to_viewers(&parent, events::MESSAGE_UPDATE, &m, None)
+                .await?;
+        }
+    }
+    Ok((StatusCode::CREATED, Json(thread)))
+}
+
+/// All threads of a text channel (active first, including archived ones).
+pub async fn list_threads(
+    State(state): State<AppState>,
+    auth: AuthUser,
+    ApiPath(parent_id): ApiPath<Id>,
+) -> ApiResult<Json<Vec<Channel>>> {
+    let (parent, _) = channel_access(&state.db, parent_id, auth.user_id).await?;
+    let mut threads: Vec<Channel> = sqlx::query_as(
+        "SELECT * FROM channels WHERE parent_id = $1 AND type = 11 ORDER BY archived, COALESCE(last_message_id, id) DESC LIMIT 100",
+    )
+    .bind(parent_id)
+    .fetch_all(&state.db)
+    .await?;
+    for t in &mut threads {
+        t.permission_overwrites = parent.permission_overwrites.clone();
+    }
+    Ok(Json(threads))
+}
+
 pub async fn delete(
     State(state): State<AppState>,
     auth: AuthUser,
     ApiPath(channel_id): ApiPath<Id>,
 ) -> ApiResult<Json<Channel>> {
     let (channel, access) = channel_access(&state.db, channel_id, auth.user_id).await?;
-    access.require_channel(&channel, permissions::MANAGE_CHANNELS)?;
+    let perm = if channel.kind == channel_type::PUBLIC_THREAD {
+        permissions::MANAGE_THREADS
+    } else {
+        permissions::MANAGE_CHANNELS
+    };
+    access.require_channel(&channel, perm)?;
     let guild_id = access.guild.id;
+    // Threads die with their channel; channels of a category move to the top level.
+    let threads: Vec<Channel> =
+        sqlx::query_as("DELETE FROM channels WHERE parent_id = $1 AND type = 11 RETURNING *")
+            .bind(channel.id)
+            .fetch_all(&state.db)
+            .await?;
+    for mut t in threads {
+        t.permission_overwrites = channel.permission_overwrites.clone();
+        state.dispatch_channel(&t, events::CHANNEL_DELETE).await?;
+    }
     let children: Vec<Id> = sqlx::query_scalar("SELECT id FROM channels WHERE parent_id = $1")
         .bind(channel.id)
         .fetch_all(&state.db)
@@ -316,6 +457,9 @@ pub async fn reorder(
         let current = channels
             .get(&upd.id)
             .ok_or(ApiError::BadRequest("UNKNOWN_CHANNEL"))?;
+        if current.kind == channel_type::PUBLIC_THREAD {
+            return Err(ApiError::BadRequest("INVALID_POSITIONS"));
+        }
         let mut next = current.clone();
         if let Some(position) = upd.position {
             next.position = position.max(0);

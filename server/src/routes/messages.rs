@@ -17,7 +17,7 @@ use crate::error::{ApiError, ApiJson, ApiPath, ApiQuery, ApiResult};
 use crate::gateway::events;
 use crate::models::{
     AttachmentRow, Channel, Message, MessageRow, PublicUser, ReactionCount, ReferencedMessage,
-    UserRow, message_type,
+    ThreadInfo, UserRow, message_type,
 };
 use crate::permissions::{self, has};
 use crate::snowflake::{EPOCH, Id};
@@ -101,6 +101,16 @@ pub async fn hydrate(
         }
     }
 
+    let mut threads: HashMap<Id, ThreadInfo> = sqlx::query_as::<_, ThreadInfo>(
+        "SELECT id, name, message_count, archived, thread_message_id FROM channels WHERE thread_message_id = ANY($1)",
+    )
+    .bind(&ids)
+    .fetch_all(db)
+    .await?
+    .into_iter()
+    .filter_map(|t| t.thread_message_id.map(|m| (m, t)))
+    .collect();
+
     let mut reactions: HashMap<Id, Vec<ReactionCount>> = HashMap::new();
     if with_reactions {
         let rows: Vec<(Id, String, i64, bool)> = sqlx::query_as(
@@ -155,6 +165,7 @@ pub async fn hydrate(
                 reactions: with_reactions.then(|| reactions.remove(&m.id).unwrap_or_default()),
                 reply_to_id: m.reply_to_id,
                 referenced_message,
+                thread: threads.remove(&m.id),
                 flags: m.flags,
                 nonce: None,
             }
@@ -628,11 +639,17 @@ pub async fn create(
         .execute(&mut *tx)
         .await?;
     }
-    sqlx::query("UPDATE channels SET last_message_id = $2 WHERE id = $1")
-        .bind(channel_id)
-        .bind(message_id)
-        .execute(&mut *tx)
-        .await?;
+    // Threads count their messages and are revived by new activity.
+    sqlx::query(
+        "UPDATE channels SET last_message_id = $2,
+                message_count = message_count + CASE WHEN type = 11 THEN 1 ELSE 0 END,
+                archived = false
+         WHERE id = $1",
+    )
+    .bind(channel_id)
+    .bind(message_id)
+    .execute(&mut *tx)
+    .await?;
     // The author has read their own message.
     sqlx::query(
         "INSERT INTO read_states (user_id, channel_id, last_message_id) VALUES ($1, $2, $3)
@@ -657,6 +674,12 @@ pub async fn create(
         .await?;
     }
 
+    if channel.archived {
+        let revived = crate::access::fetch_channel(&state.db, channel_id).await?;
+        state
+            .dispatch_channel(&revived, events::CHANNEL_UPDATE)
+            .await?;
+    }
     let mut message = hydrate_one(&state, row, channel.guild_id, auth.user_id, false).await?;
     message.reactions = Some(vec![]);
     message.nonce = nonce;
@@ -747,6 +770,10 @@ pub async fn delete(
             .await?;
     sqlx::query("DELETE FROM messages WHERE id = $1")
         .bind(message_id)
+        .execute(&state.db)
+        .await?;
+    sqlx::query("UPDATE channels SET message_count = GREATEST(message_count - 1, 0) WHERE id = $1 AND type = 11")
+        .bind(channel_id)
         .execute(&state.db)
         .await?;
     for f in files {

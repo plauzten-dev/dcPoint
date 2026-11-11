@@ -72,6 +72,10 @@ pub fn router(state: AppState) -> Router {
         )
         .route("/channels/{channel_id}/invites", post(invites::create))
         .route(
+            "/channels/{channel_id}/threads",
+            get(channels::list_threads).post(channels::create_thread),
+        )
+        .route(
             "/channels/{channel_id}/messages",
             get(messages::list)
                 .post(messages::create)

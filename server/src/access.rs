@@ -122,9 +122,14 @@ pub async fn fetch_channel(db: &PgPool, channel_id: Id) -> ApiResult<Channel> {
         .fetch_optional(db)
         .await?
         .ok_or(ApiError::NotFound("UNKNOWN_CHANNEL"))?;
-    channel.permission_overwrites = load_overwrites(db, &[channel_id.0])
+    // Threads inherit the permission overwrites of their parent channel.
+    let source = match (channel.kind, channel.parent_id) {
+        (crate::permissions::channel_type::PUBLIC_THREAD, Some(parent)) => parent,
+        _ => channel_id,
+    };
+    channel.permission_overwrites = load_overwrites(db, &[source.0])
         .await?
-        .remove(&channel_id)
+        .remove(&source)
         .unwrap_or_default();
     Ok(channel)
 }
