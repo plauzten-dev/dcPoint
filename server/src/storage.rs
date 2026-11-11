@@ -78,6 +78,20 @@ impl Storage {
         Ok(())
     }
 
+    pub async fn delete(&self, key: &str) -> anyhow::Result<()> {
+        anyhow::ensure!(valid_key(key), "invalid storage key");
+        match self {
+            Storage::Local(dir) => match tokio::fs::remove_file(dir.join(key)).await {
+                Err(e) if e.kind() != std::io::ErrorKind::NotFound => return Err(e.into()),
+                _ => {}
+            },
+            Storage::S3(bucket) => {
+                bucket.delete_object(key).await?;
+            }
+        }
+        Ok(())
+    }
+
     pub async fn get(&self, key: &str) -> anyhow::Result<Option<Bytes>> {
         if !valid_key(key) {
             return Ok(None);

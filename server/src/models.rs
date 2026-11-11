@@ -306,3 +306,139 @@ pub struct Invite {
     pub approximate_member_count: i64,
     pub approximate_presence_count: i64,
 }
+
+pub mod message_type {
+    pub const DEFAULT: i16 = 0;
+    pub const REPLY: i16 = 19;
+}
+
+/// Message flags (bitfield).
+pub mod message_flags {
+    /// Marked as the accepted answer (knowledge base).
+    pub const SOLUTION: i32 = 1 << 0;
+}
+
+#[derive(Clone, Debug, FromRow)]
+pub struct MessageRow {
+    pub id: Id,
+    pub channel_id: Id,
+    pub author_id: Option<Id>,
+    pub content: String,
+    #[sqlx(rename = "type")]
+    pub kind: i16,
+    pub reply_to_id: Option<Id>,
+    pub edited_at: Option<DateTime<Utc>>,
+    pub pinned: bool,
+    pub mention_everyone: bool,
+    pub mention_ids: Vec<i64>,
+    pub mention_role_ids: Vec<i64>,
+    pub embeds: sqlx::types::Json<serde_json::Value>,
+    pub flags: i32,
+}
+
+#[derive(Clone, Debug, FromRow, Serialize)]
+pub struct AttachmentRow {
+    pub id: Id,
+    #[serde(skip)]
+    pub message_id: Option<Id>,
+    #[serde(skip)]
+    pub channel_id: Id,
+    pub filename: String,
+    pub content_type: String,
+    pub size: i64,
+    pub width: Option<i32>,
+    pub height: Option<i32>,
+    pub spoiler: bool,
+    #[serde(skip)]
+    pub url_token: String,
+}
+
+#[derive(Clone, Debug, Serialize)]
+pub struct Attachment {
+    #[serde(flatten)]
+    pub row: AttachmentRow,
+    /// Path relative to the API origin (`/cdn/attachments/...`).
+    pub url: String,
+}
+
+impl AttachmentRow {
+    pub fn storage_key(&self) -> String {
+        format!(
+            "attachments/{}/{}/{}",
+            self.channel_id, self.id, self.url_token
+        )
+    }
+
+    pub fn into_public(self) -> Attachment {
+        let url = format!(
+            "/cdn/attachments/{}/{}/{}/{}",
+            self.channel_id,
+            self.id,
+            self.url_token,
+            urlencode(&self.filename)
+        );
+        Attachment { row: self, url }
+    }
+}
+
+fn urlencode(s: &str) -> String {
+    s.bytes()
+        .map(|b| match b {
+            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'_' | b'.' | b'~' => {
+                (b as char).to_string()
+            }
+            _ => format!("%{b:02X}"),
+        })
+        .collect()
+}
+
+#[derive(Clone, Debug, Serialize)]
+pub struct ReactionCount {
+    pub emoji: String,
+    pub count: i64,
+    pub me: bool,
+}
+
+/// Compact form of a replied-to message.
+#[derive(Clone, Debug, Serialize)]
+pub struct ReferencedMessage {
+    pub id: Id,
+    pub author: Option<PublicUser>,
+    pub content: String,
+    pub has_attachments: bool,
+}
+
+#[derive(Clone, Debug, Serialize)]
+pub struct Message {
+    pub id: Id,
+    pub channel_id: Id,
+    pub guild_id: Option<Id>,
+    pub author: Option<PublicUser>,
+    pub content: String,
+    #[serde(rename = "type")]
+    pub kind: i16,
+    pub timestamp: DateTime<Utc>,
+    pub edited_at: Option<DateTime<Utc>>,
+    pub pinned: bool,
+    pub mention_everyone: bool,
+    pub mentions: Vec<Id>,
+    pub mention_roles: Vec<Id>,
+    pub attachments: Vec<Attachment>,
+    pub embeds: serde_json::Value,
+    /// Omitted in update events (counts and `me` are per viewer).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub reactions: Option<Vec<ReactionCount>>,
+    pub reply_to_id: Option<Id>,
+    pub referenced_message: Option<ReferencedMessage>,
+    pub flags: i32,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub nonce: Option<String>,
+}
+
+#[derive(Clone, Debug, FromRow, Serialize)]
+pub struct ReadState {
+    #[serde(rename = "id")]
+    pub channel_id: Id,
+    pub last_message_id: Id,
+    pub mention_count: i32,
+}

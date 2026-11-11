@@ -178,3 +178,121 @@ async fn ready_dispatch_presence_and_resume(pool: PgPool) {
         member_id.as_str()
     );
 }
+
+#[sqlx::test(migrations = "./migrations")]
+async fn message_events_reach_viewers_only(pool: PgPool) {
+    let app = TestApp::new(pool).await;
+    let url = serve(&app).await;
+    let (owner, owner_id) = app.register("owner").await;
+    let (member, _) = app.register("member").await;
+    let guild = app.create_guild(&owner, "Live").await;
+    let gid = guild["id"].as_str().unwrap().to_owned();
+    let general = channel_by_name(&guild, "allgemein")["id"]
+        .as_str()
+        .unwrap()
+        .to_owned();
+    let code = app.invite(&owner, &general).await;
+    app.post(&format!("/invites/{code}"), &member, json!({}))
+        .await;
+    let (_, secret) = app
+        .post(
+            &format!("/guilds/{gid}/channels"),
+            &owner,
+            json!({ "name": "geheim", "private": true }),
+        )
+        .await;
+    let secret = secret["id"].as_str().unwrap().to_owned();
+
+    let (mut ows, _) = identify(&url, &owner).await;
+    let (mut mws, _) = identify(&url, &member).await;
+
+    // typing is not echoed to the typer
+    app.post(&format!("/channels/{general}/typing"), &owner, json!({}))
+        .await;
+    let t = wait_for(&mut mws, "TYPING_START").await;
+    assert_eq!(t["d"]["user_id"], owner_id.as_str());
+
+    app.post(
+        &format!("/channels/{secret}/messages"),
+        &owner,
+        json!({ "content": "geheim" }),
+    )
+    .await;
+    let (_, sent) = app
+        .post(
+            &format!("/channels/{general}/messages"),
+            &owner,
+            json!({ "content": "hallo", "nonce": "abc" }),
+        )
+        .await;
+    let created = wait_for(&mut mws, "MESSAGE_CREATE").await;
+    assert_eq!(
+        created["d"]["content"], "hallo",
+        "private channel message must not reach the member"
+    );
+    assert_eq!(created["d"]["nonce"], "abc");
+    // the author's own sessions get it too (for multi-device + optimistic reconciliation)
+    let own = wait_for(&mut ows, "MESSAGE_CREATE").await;
+    assert_eq!(own["d"]["content"], "geheim");
+    assert_eq!(
+        wait_for(&mut ows, "MESSAGE_CREATE").await["d"]["nonce"],
+        "abc"
+    );
+
+    let mid = sent["id"].as_str().unwrap();
+    app.req(
+        axum::http::Method::PUT,
+        &format!("/channels/{general}/messages/{mid}/reactions/%F0%9F%91%8D/@me"),
+        Some(&member),
+        None,
+    )
+    .await;
+    let r = wait_for(&mut ows, "MESSAGE_REACTION_ADD").await;
+    assert_eq!(r["d"]["emoji"], "👍");
+    app.patch(
+        &format!("/channels/{general}/messages/{mid}"),
+        &owner,
+        json!({ "content": "hallo!" }),
+    )
+    .await;
+    let u = wait_for(&mut mws, "MESSAGE_UPDATE").await;
+    assert_eq!(u["d"]["content"], "hallo!");
+    assert!(
+        u["d"].get("reactions").is_none(),
+        "updates never carry per-viewer reaction state"
+    );
+    app.delete(&format!("/channels/{general}/messages/{mid}"), &owner)
+        .await;
+    assert_eq!(wait_for(&mut mws, "MESSAGE_DELETE").await["d"]["id"], mid);
+
+    // read states are part of READY
+    app.post(
+        &format!("/channels/{general}/messages"),
+        &owner,
+        json!({ "content": format!("<@{}>", "0") }),
+    )
+    .await;
+    let (_, me) = app.get("/users/@me", &member).await;
+    let (_, ping) = app
+        .post(
+            &format!("/channels/{general}/messages"),
+            &owner,
+            json!({ "content": format!("<@{}> ping", me["id"].as_str().unwrap()) }),
+        )
+        .await;
+    let (_, ready) = identify(&url, &member).await;
+    let rs = ready["d"]["read_states"].as_array().unwrap();
+    let state = rs
+        .iter()
+        .find(|r| r["id"] == general.as_str())
+        .expect("read state for general");
+    assert_eq!(state["mention_count"], 1);
+    let ch = ready["d"]["guilds"][0]["channels"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|c| c["id"] == general.as_str())
+        .unwrap()
+        .clone();
+    assert_eq!(ch["last_message_id"], ping["id"]);
+}

@@ -1,5 +1,6 @@
 //! Fixed-window rate limiting per client IP.
 
+use std::hash::Hash;
 use std::net::{IpAddr, SocketAddr};
 use std::time::{Duration, Instant};
 
@@ -11,13 +12,14 @@ use dashmap::DashMap;
 use crate::error::ApiError;
 use crate::state::AppState;
 
-pub struct RateLimiter {
+/// Fixed-window limiter keyed by client IP (auth) or user id (messages).
+pub struct RateLimiter<K: Hash + Eq = IpAddr> {
     limit: u32,
     window: Duration,
-    hits: DashMap<IpAddr, (Instant, u32)>,
+    hits: DashMap<K, (Instant, u32)>,
 }
 
-impl RateLimiter {
+impl<K: Hash + Eq> RateLimiter<K> {
     pub fn new(limit: u32, window: Duration) -> Self {
         Self {
             limit,
@@ -27,12 +29,12 @@ impl RateLimiter {
     }
 
     /// `Err(retry_after_secs)` when the limit is exceeded. A limit of 0 disables limiting.
-    pub fn check(&self, ip: IpAddr) -> Result<(), u64> {
+    pub fn check(&self, key: K) -> Result<(), u64> {
         if self.limit == 0 {
             return Ok(());
         }
         let now = Instant::now();
-        let mut entry = self.hits.entry(ip).or_insert((now, 0));
+        let mut entry = self.hits.entry(key).or_insert((now, 0));
         if now.duration_since(entry.0) >= self.window {
             *entry = (now, 0);
         }

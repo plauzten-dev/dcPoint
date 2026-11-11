@@ -231,10 +231,16 @@ async fn identify_session(
             .await?;
         let guilds = state.guild_payloads(user_id, None).await?;
         let presences = state.guild_presences(&guild_ids).await?;
-        Ok::<_, crate::error::ApiError>((user, guilds, presences))
+        let read_states: Vec<crate::models::ReadState> = sqlx::query_as(
+            "SELECT channel_id, last_message_id, mention_count FROM read_states WHERE user_id = $1",
+        )
+        .bind(user_id)
+        .fetch_all(&state.db)
+        .await?;
+        Ok::<_, crate::error::ApiError>((user, guilds, presences, read_states))
     }
     .await;
-    let (user, guilds, mut presences) = match built {
+    let (user, guilds, mut presences, read_states) = match built {
         Ok(v) => v,
         Err(e) => {
             state.hub.kill_auth_session(user_id.0, auth_session);
@@ -252,6 +258,7 @@ async fn identify_session(
             "user": user.private(),
             "guilds": guilds,
             "presences": presences,
+            "read_states": read_states,
         }
     });
     if state

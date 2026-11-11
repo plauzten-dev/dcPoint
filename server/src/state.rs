@@ -19,6 +19,8 @@ pub struct Inner {
     pub ids: SnowflakeGen,
     pub sessions: SessionCache,
     pub auth_limiter: RateLimiter,
+    /// Per-user message send limit (5 messages per 5 seconds).
+    pub message_limiter: RateLimiter<i64>,
 }
 
 #[derive(Clone)]
@@ -36,6 +38,7 @@ impl AppState {
         Self(Arc::new(Inner {
             ids: SnowflakeGen::new(cfg.worker_id),
             auth_limiter: RateLimiter::new(cfg.auth_rate_limit_per_min, Duration::from_secs(60)),
+            message_limiter: RateLimiter::new(cfg.message_rate_limit, Duration::from_secs(5)),
             hub: Hub::default(),
             sessions: SessionCache::default(),
             db,
@@ -53,6 +56,7 @@ impl AppState {
                 tick.tick().await;
                 state.hub.reap();
                 state.auth_limiter.prune();
+                state.message_limiter.prune();
             }
         });
     }

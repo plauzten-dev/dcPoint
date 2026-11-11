@@ -27,6 +27,14 @@ pub mod events {
     pub const GUILD_MEMBER_REMOVE: &str = "GUILD_MEMBER_REMOVE";
     pub const PRESENCE_UPDATE: &str = "PRESENCE_UPDATE";
     pub const USER_UPDATE: &str = "USER_UPDATE";
+    pub const MESSAGE_CREATE: &str = "MESSAGE_CREATE";
+    pub const MESSAGE_UPDATE: &str = "MESSAGE_UPDATE";
+    pub const MESSAGE_DELETE: &str = "MESSAGE_DELETE";
+    pub const MESSAGE_REACTION_ADD: &str = "MESSAGE_REACTION_ADD";
+    pub const MESSAGE_REACTION_REMOVE: &str = "MESSAGE_REACTION_REMOVE";
+    pub const MESSAGE_ACK: &str = "MESSAGE_ACK";
+    pub const CHANNEL_PINS_UPDATE: &str = "CHANNEL_PINS_UPDATE";
+    pub const TYPING_START: &str = "TYPING_START";
 }
 
 impl AppState {
@@ -46,24 +54,45 @@ impl AppState {
         self.dispatch(self.hub.guild_users(guild_id.0), event, data);
     }
 
-    /// Sends a channel event only to members who can see the channel. For updates,
-    /// members who lost access receive CHANNEL_DELETE instead.
-    pub async fn dispatch_channel(&self, channel: &Channel, event: &str) -> ApiResult<()> {
+    /// Connected users split into (can view `channel`, cannot view).
+    async fn split_viewers(&self, channel: &Channel) -> ApiResult<(Vec<i64>, Vec<i64>)> {
         let Some(guild_id) = channel.guild_id else {
-            return Ok(());
+            return Ok((vec![], vec![]));
         };
         let users = self.hub.guild_users(guild_id.0);
         if users.is_empty() {
-            return Ok(());
+            return Ok((vec![], vec![]));
         }
         let access = GuildMembersAccess::load(&self.db, guild_id, &users).await?;
-        let (visible, hidden): (Vec<i64>, Vec<i64>) = users
+        Ok(users
             .into_iter()
-            .partition(|u| access.can_view(*u, channel));
+            .partition(|u| access.can_view(*u, channel)))
+    }
+
+    /// Sends a channel event only to members who can see the channel. For updates,
+    /// members who lost access receive CHANNEL_DELETE instead.
+    pub async fn dispatch_channel(&self, channel: &Channel, event: &str) -> ApiResult<()> {
+        let (visible, hidden) = self.split_viewers(channel).await?;
         self.dispatch(visible, event, channel);
         if event == events::CHANNEL_UPDATE && !hidden.is_empty() {
             self.dispatch(hidden, events::CHANNEL_DELETE, channel);
         }
+        Ok(())
+    }
+
+    /// Sends an event about something inside `channel` to everyone who can see it.
+    pub async fn dispatch_to_viewers<T: Serialize>(
+        &self,
+        channel: &Channel,
+        event: &str,
+        data: &T,
+        exclude: Option<Id>,
+    ) -> ApiResult<()> {
+        let (mut visible, _) = self.split_viewers(channel).await?;
+        if let Some(ex) = exclude {
+            visible.retain(|u| *u != ex.0);
+        }
+        self.dispatch(visible, event, data);
         Ok(())
     }
 

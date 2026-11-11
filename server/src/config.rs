@@ -24,6 +24,10 @@ pub struct Config {
     pub auth_rate_limit_per_min: u32,
     /// Trust X-Real-IP / X-Forwarded-For (only behind a reverse proxy).
     pub trust_proxy: bool,
+    /// Maximum size of a single uploaded file (no paywall: the operator decides).
+    pub max_upload_bytes: usize,
+    /// Messages per user per 5 seconds (0 = unlimited).
+    pub message_rate_limit: u32,
 }
 
 impl Config {
@@ -67,6 +71,8 @@ impl Config {
             worker_id: var_or("WORKER_ID", "1").parse()?,
             auth_rate_limit_per_min: var_or("AUTH_RATE_LIMIT_PER_MIN", "30").parse()?,
             trust_proxy: var_or("TRUST_PROXY", "false").parse()?,
+            max_upload_bytes: var_or("MAX_UPLOAD_MB", "50").parse::<usize>()? * 1024 * 1024,
+            message_rate_limit: var_or("MESSAGE_RATE_LIMIT", "5").parse()?,
         })
     }
 
@@ -86,6 +92,8 @@ impl Config {
             worker_id: 1,
             auth_rate_limit_per_min: 0,
             trust_proxy: false,
+            max_upload_bytes: 20 * 1024 * 1024,
+            message_rate_limit: 0,
         }
     }
 }

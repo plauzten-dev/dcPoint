@@ -15,13 +15,14 @@ path = "src/main.rs"
 [dependencies]
 anyhow = "1"
 argon2 = { version = "0.5", features = ["std"] }
-axum = { version = "0.8", features = ["ws", "macros"] }
+axum = { version = "0.8", features = ["ws", "macros", "multipart"] }
 base64 = "0.22"
 bytes = "1"
 chrono = { version = "0.4", default-features = false, features = ["clock", "serde", "std"] }
 dashmap = "6"
 futures-util = { version = "0.3", default-features = false, features = ["sink", "std"] }
 hmac = "0.12"
+imagesize = "0.13"
 rand = "0.8"
 rust-s3 = { version = "0.35", default-features = false, features = ["tokio-rustls-tls"] }
 serde = { version = "1", features = ["derive"] }

@@ -3,13 +3,14 @@ mod cdn;
 mod channels;
 mod guilds;
 mod invites;
+mod messages;
 mod users;
 
 use axum::Router;
 use axum::extract::DefaultBodyLimit;
 use axum::http::{HeaderName, HeaderValue, Method, header};
 use axum::middleware;
-use axum::routing::{delete, get, patch, post};
+use axum::routing::{delete, get, patch, post, put};
 use tower_http::compression::CompressionLayer;
 use tower_http::cors::{AllowOrigin, CorsLayer};
 use tower_http::trace::TraceLayer;
@@ -20,6 +21,7 @@ use crate::state::AppState;
 
 /// Data URIs for avatars/banners (8 MiB binary ≈ 11 MiB base64).
 const BODY_LIMIT: usize = 12 * 1024 * 1024;
+const MAX_FILES_PER_MESSAGE: usize = 10;
 
 pub fn router(state: AppState) -> Router {
     let auth_routes = Router::new()
@@ -61,6 +63,36 @@ pub fn router(state: AppState) -> Router {
         )
         .route("/channels/{channel_id}/invites", post(invites::create))
         .route(
+            "/channels/{channel_id}/messages",
+            get(messages::list)
+                .post(messages::create)
+                .layer(DefaultBodyLimit::max(
+                    state.cfg.max_upload_bytes * MAX_FILES_PER_MESSAGE + 1024 * 1024,
+                )),
+        )
+        .route(
+            "/channels/{channel_id}/messages/{message_id}",
+            patch(messages::edit).delete(messages::delete),
+        )
+        .route(
+            "/channels/{channel_id}/messages/{message_id}/ack",
+            post(messages::ack),
+        )
+        .route(
+            "/channels/{channel_id}/messages/{message_id}/reactions/{emoji}/@me",
+            put(messages::add_reaction).delete(messages::remove_own_reaction),
+        )
+        .route(
+            "/channels/{channel_id}/messages/{message_id}/reactions/{emoji}/{user_id}",
+            delete(messages::remove_user_reaction),
+        )
+        .route("/channels/{channel_id}/pins", get(messages::pins))
+        .route(
+            "/channels/{channel_id}/pins/{message_id}",
+            put(messages::pin).delete(messages::unpin),
+        )
+        .route("/channels/{channel_id}/typing", post(messages::typing))
+        .route(
             "/invites/{code}",
             get(invites::get)
                 .post(invites::accept)
@@ -93,6 +125,10 @@ pub fn router(state: AppState) -> Router {
         .nest("/api/v1", api)
         .route("/gateway", get(ws_handler))
         .route("/cdn/{kind}/{owner}/{hash}", get(cdn::get))
+        .route(
+            "/cdn/attachments/{channel_id}/{attachment_id}/{token}/{filename}",
+            get(cdn::attachment),
+        )
         .layer(DefaultBodyLimit::max(BODY_LIMIT))
         .layer(CompressionLayer::new())
         .layer(cors)
