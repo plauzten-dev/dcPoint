@@ -195,10 +195,10 @@ impl Embedder {
     }
 
     async fn embed_for(&self, url: &str) -> Option<Embed> {
-        if let Some(hit) = self.cache.get(url) {
-            if hit.0.elapsed() < CACHE_TTL {
-                return hit.1.clone();
-            }
+        if let Some(hit) = self.cache.get(url)
+            && hit.0.elapsed() < CACHE_TTL
+        {
+            return hit.1.clone();
         }
         let result = self.build(url).await;
         if self.cache.len() > 5_000 {
@@ -380,10 +380,10 @@ pub fn parse_meta(html: &str) -> std::collections::HashMap<String, String> {
                 _ => {}
             }
         }
-        if let (Some(k), Some(c)) = (key, content) {
-            if !c.is_empty() {
-                out.entry(k).or_insert(c);
-            }
+        if let (Some(k), Some(c)) = (key, content)
+            && !c.is_empty()
+        {
+            out.entry(k).or_insert(c);
         }
     }
     out
@@ -450,12 +450,11 @@ pub fn spawn_embed_job(state: &AppState, message_id: Id, content: &str) {
         if let Ok(mut list) =
             crate::routes::messages::hydrate(&state, vec![row], channel.guild_id, author, false)
                 .await
+            && let Some(m) = list.pop()
         {
-            if let Some(m) = list.pop() {
-                let _ = state
-                    .dispatch_to_viewers(&channel, events::MESSAGE_UPDATE, &m, None)
-                    .await;
-            }
+            let _ = state
+                .dispatch_to_viewers(&channel, events::MESSAGE_UPDATE, &m, None)
+                .await;
         }
     });
 }
