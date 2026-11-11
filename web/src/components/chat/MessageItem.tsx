@@ -15,6 +15,7 @@ import { Avatar } from '../ui/Avatar';
 import { Tooltip } from '../ui/Tooltip';
 import { copyMessageLink, deleteMessage, replyTo, startEdit, togglePin, toggleReaction, type AuthorInfo } from './actions';
 import { Attachments } from './Attachments';
+import { Embeds } from './Embeds';
 import { MAX_LENGTH } from './Composer';
 
 /** Single-line preview with mentions resolved (used for reply previews). */
@@ -227,6 +228,7 @@ export const MessageItem = memo(function MessageItem(p: ItemProps) {
 
       {editing ? <InlineEditor message={m} /> : content}
       <Attachments items={m.attachments} onOpenImage={p.onOpenImage} />
+      <Embeds items={m.embeds} />
       {m.progress !== undefined && pending && (
         <div className="mt-1 h-1.5 w-60 max-w-full overflow-hidden rounded bg-input">
           <div className="h-full bg-brand transition-[width]" style={{ width: `${Math.round(m.progress * 100)}%` }} />

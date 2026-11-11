@@ -663,6 +663,7 @@ pub async fn create(
     state
         .dispatch_to_viewers(&channel, events::MESSAGE_CREATE, &message, None)
         .await?;
+    crate::embeds::spawn_embed_job(&state, message.id, &message.content);
     Ok((StatusCode::CREATED, Json(message)))
 }
 
@@ -707,7 +708,8 @@ pub async fn edit(
         }
     }
     let row: MessageRow = sqlx::query_as(
-        "UPDATE messages SET content = $2, edited_at = now(), mention_everyone = $3, mention_ids = $4, mention_role_ids = $5
+        "UPDATE messages SET content = $2, edited_at = now(), mention_everyone = $3, mention_ids = $4, mention_role_ids = $5,
+                embeds = '[]'
          WHERE id = $1 RETURNING *",
     )
     .bind(message_id)
@@ -721,6 +723,7 @@ pub async fn edit(
     state
         .dispatch_to_viewers(&channel, events::MESSAGE_UPDATE, &message, None)
         .await?;
+    crate::embeds::spawn_embed_job(&state, message.id, &message.content);
     Ok(Json(message))
 }
 

@@ -159,6 +159,17 @@ export interface ReferencedMessage {
   has_attachments: boolean;
 }
 
+export interface Embed {
+  type: 'link' | 'image';
+  url: string;
+  title?: string;
+  description?: string;
+  site_name?: string;
+  color?: string;
+  image?: { url: string };
+  large: boolean;
+}
+
 export const MessageType = { Default: 0, Reply: 19 } as const;
 export const MessageFlags = { Solution: 1 } as const;
 
@@ -176,7 +187,7 @@ export interface Message {
   mentions: Snowflake[];
   mention_roles: Snowflake[];
   attachments: Attachment[];
-  embeds: unknown[];
+  embeds: Embed[];
   reactions?: ReactionCount[];
   reply_to_id: Snowflake | null;
   referenced_message: ReferencedMessage | null;

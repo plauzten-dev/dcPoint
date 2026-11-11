@@ -3,7 +3,7 @@ mod cdn;
 mod channels;
 mod guilds;
 mod invites;
-mod messages;
+pub mod messages;
 mod users;
 
 use axum::Router;
@@ -129,6 +129,7 @@ pub fn router(state: AppState) -> Router {
             "/cdn/attachments/{channel_id}/{attachment_id}/{token}/{filename}",
             get(cdn::attachment),
         )
+        .route("/cdn/proxy", get(cdn::proxy))
         .layer(DefaultBodyLimit::max(BODY_LIMIT))
         .layer(CompressionLayer::new())
         .layer(cors)

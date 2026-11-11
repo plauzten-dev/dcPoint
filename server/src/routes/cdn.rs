@@ -2,7 +2,8 @@ use axum::extract::State;
 use axum::http::{HeaderValue, header};
 use axum::response::{IntoResponse, Response};
 
-use crate::error::{ApiError, ApiPath, ApiResult};
+use crate::embeds::MAX_IMAGE;
+use crate::error::{ApiError, ApiPath, ApiQuery, ApiResult};
 use crate::models::AttachmentRow;
 use crate::snowflake::Id;
 
@@ -101,6 +102,45 @@ pub async fn attachment(
     h.insert(
         header::CONTENT_SECURITY_POLICY,
         HeaderValue::from_static("default-src 'none'; media-src 'self'; sandbox"),
+    );
+    Ok(res)
+}
+
+#[derive(serde::Deserialize)]
+pub struct ProxyQuery {
+    url: String,
+    sig: String,
+}
+
+/// Image proxy for link previews: users never contact third-party hosts directly.
+pub async fn proxy(
+    State(state): State<AppState>,
+    ApiQuery(q): ApiQuery<ProxyQuery>,
+) -> ApiResult<Response> {
+    if !state.embedder.verify(&q.url, &q.sig) {
+        return Err(ApiError::NotFound("UNKNOWN_ASSET"));
+    }
+    let (_, body) = state
+        .embedder
+        .fetch(&q.url, MAX_IMAGE)
+        .await
+        .ok_or(ApiError::NotFound("UNKNOWN_ASSET"))?;
+    // Only real raster images (magic bytes), never SVG/HTML.
+    let mime = sniff_image(&body).ok_or(ApiError::NotFound("UNKNOWN_ASSET"))?;
+    let mut res = body.into_response();
+    let h = res.headers_mut();
+    h.insert(header::CONTENT_TYPE, HeaderValue::from_static(mime));
+    h.insert(
+        header::CACHE_CONTROL,
+        HeaderValue::from_static("public, max-age=86400"),
+    );
+    h.insert(
+        header::X_CONTENT_TYPE_OPTIONS,
+        HeaderValue::from_static("nosniff"),
+    );
+    h.insert(
+        header::CONTENT_SECURITY_POLICY,
+        HeaderValue::from_static("default-src 'none'"),
     );
     Ok(res)
 }

@@ -6,6 +6,7 @@ use sqlx::PgPool;
 
 use crate::auth::SessionCache;
 use crate::config::Config;
+use crate::embeds::Embedder;
 use crate::gateway::hub::Hub;
 use crate::ratelimit::RateLimiter;
 use crate::snowflake::SnowflakeGen;
@@ -21,6 +22,7 @@ pub struct Inner {
     pub auth_limiter: RateLimiter,
     /// Per-user message send limit (5 messages per 5 seconds).
     pub message_limiter: RateLimiter<i64>,
+    pub embedder: Embedder,
 }
 
 #[derive(Clone)]
@@ -39,6 +41,7 @@ impl AppState {
             ids: SnowflakeGen::new(cfg.worker_id),
             auth_limiter: RateLimiter::new(cfg.auth_rate_limit_per_min, Duration::from_secs(60)),
             message_limiter: RateLimiter::new(cfg.message_rate_limit, Duration::from_secs(5)),
+            embedder: Embedder::new(cfg.secret_key.clone(), cfg.allow_private_embeds),
             hub: Hub::default(),
             sessions: SessionCache::default(),
             db,

@@ -28,6 +28,10 @@ pub struct Config {
     pub max_upload_bytes: usize,
     /// Messages per user per 5 seconds (0 = unlimited).
     pub message_rate_limit: u32,
+    /// Fetch link previews for URLs in messages.
+    pub embeds_enabled: bool,
+    /// Allow previews of private network addresses (tests only).
+    pub allow_private_embeds: bool,
 }
 
 impl Config {
@@ -73,6 +77,8 @@ impl Config {
             trust_proxy: var_or("TRUST_PROXY", "false").parse()?,
             max_upload_bytes: var_or("MAX_UPLOAD_MB", "50").parse::<usize>()? * 1024 * 1024,
             message_rate_limit: var_or("MESSAGE_RATE_LIMIT", "5").parse()?,
+            embeds_enabled: var_or("EMBEDS_ENABLED", "true").parse()?,
+            allow_private_embeds: false,
         })
     }
 
@@ -94,6 +100,8 @@ impl Config {
             trust_proxy: false,
             max_upload_bytes: 20 * 1024 * 1024,
             message_rate_limit: 0,
+            embeds_enabled: true,
+            allow_private_embeds: true,
         }
     }
 }

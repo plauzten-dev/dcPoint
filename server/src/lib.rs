@@ -4,6 +4,7 @@
 pub mod access;
 pub mod auth;
 pub mod config;
+pub mod embeds;
 pub mod error;
 pub mod gateway;
 pub mod images;
