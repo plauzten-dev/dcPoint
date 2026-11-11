@@ -1,5 +1,6 @@
 import { memo, useEffect, useState, type ReactNode } from 'react';
 import { Check, Copy } from 'lucide-react';
+import { API_BASE } from '../api/client';
 import { cn } from './cn';
 import { copyText } from './format';
 import { highlight } from './highlight';
@@ -80,7 +81,18 @@ const rules: Rule[] = [
     ),
   },
   { re: /@(everyone|here)/y, render: (m, _c, k) => <span key={k} className="md-mention">@{m[1]}</span> },
+  {
+    re: /<(a?):(\w{2,32}):(\d+)>/y,
+    render: (m, _c, k) => <img key={k} src={`${API_BASE}/cdn/emojis/${m[3]}`} alt={`:${m[2]}:`} title={`:${m[2]}:`} className="md-emoji" draggable={false} />,
+  },
 ];
+
+/** Renders a reaction/picker emoji: unicode or custom `name:id`. */
+export function EmojiGlyph({ emoji, size = 16 }: { emoji: string; size?: number }) {
+  const custom = /^(\w+):(\d+)$/.exec(emoji);
+  if (custom) return <img src={`${API_BASE}/cdn/emojis/${custom[2]}`} alt={`:${custom[1]}:`} width={size} height={size} className="inline-block object-contain" draggable={false} />;
+  return <span style={{ fontSize: size }} className="leading-none">{emoji}</span>;
+}
 
 /** Characters that may start a rule; everything else is copied verbatim. */
 const SPECIAL = /[\\`|*_~[h<@]/g;

@@ -1,6 +1,7 @@
 mod auth;
 mod cdn;
 mod channels;
+mod emojis;
 mod guilds;
 mod invites;
 pub mod messages;
@@ -55,6 +56,14 @@ pub fn router(state: AppState) -> Router {
             post(channels::create).patch(channels::reorder),
         )
         .route("/guilds/{guild_id}/invites", get(invites::list_for_guild))
+        .route(
+            "/guilds/{guild_id}/emojis",
+            get(emojis::list).post(emojis::create),
+        )
+        .route(
+            "/guilds/{guild_id}/emojis/{emoji_id}",
+            patch(emojis::update).delete(emojis::delete),
+        )
         .route(
             "/channels/{channel_id}",
             get(channels::get)
@@ -130,6 +139,7 @@ pub fn router(state: AppState) -> Router {
             get(cdn::attachment),
         )
         .route("/cdn/proxy", get(cdn::proxy))
+        .route("/cdn/emojis/{emoji}", get(cdn::emoji))
         .layer(DefaultBodyLimit::max(BODY_LIMIT))
         .layer(CompressionLayer::new())
         .layer(cors)

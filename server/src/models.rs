@@ -254,6 +254,7 @@ pub struct GuildPayload {
     /// The receiving user's own member roles.
     pub my_roles: Vec<Id>,
     pub my_communication_disabled_until: Option<DateTime<Utc>>,
+    pub emojis: Vec<Emoji>,
 }
 
 #[derive(Clone, Debug, FromRow)]
@@ -441,4 +442,14 @@ pub struct ReadState {
     pub channel_id: Id,
     pub last_message_id: Id,
     pub mention_count: i32,
+}
+
+#[derive(Clone, Debug, FromRow, Serialize)]
+pub struct Emoji {
+    pub id: Id,
+    pub guild_id: Id,
+    pub name: String,
+    pub animated: bool,
+    #[serde(skip)]
+    pub creator_id: Option<Id>,
 }

@@ -563,3 +563,85 @@ async fn attachments_upload_and_serve(pool: PgPool) {
     let (s, _, _) = raw_get(app, &url).await;
     assert_eq!(s, StatusCode::NOT_FOUND);
 }
+
+#[sqlx::test(migrations = "./migrations")]
+async fn custom_emojis(pool: PgPool) {
+    let c = setup(pool).await;
+    let app = &c.app;
+    let png = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==";
+    let path = format!("/guilds/{}/emojis", c.gid);
+
+    let (s, _) = app
+        .post(&path, &c.member, json!({ "name": "blob", "image": png }))
+        .await;
+    assert_eq!(s, StatusCode::FORBIDDEN, "MANAGE_EMOJIS required");
+    let (s, body) = app
+        .post(&path, &c.owner, json!({ "name": "nicht ok", "image": png }))
+        .await;
+    assert_eq!(body["errors"]["name"], "EMOJI_NAME_INVALID", "{s}");
+    let (s, emoji) = app
+        .post(
+            &path,
+            &c.owner,
+            json!({ "name": "party_blob", "image": png }),
+        )
+        .await;
+    assert_eq!(s, StatusCode::CREATED, "{emoji}");
+    let (s, body) = app
+        .post(
+            &path,
+            &c.owner,
+            json!({ "name": "PARTY_BLOB", "image": png }),
+        )
+        .await;
+    assert_eq!(body["errors"]["name"], "EMOJI_NAME_TAKEN", "{s}");
+    let id = emoji["id"].as_str().unwrap();
+
+    let (s, _, bytes) = raw_get(app, &format!("/cdn/emojis/{id}.png")).await;
+    assert_eq!(s, StatusCode::OK);
+    assert!(bytes.starts_with(b"\x89PNG"));
+
+    // part of the guild payload, usable in reactions
+    let (_, g) = app.get(&format!("/guilds/{}", c.gid), &c.member).await;
+    assert_eq!(g["emojis"][0]["name"], "party_blob");
+    let (_, m) = send(
+        app,
+        &c.member,
+        &c.general,
+        json!({ "content": format!("<:party_blob:{id}>") }),
+    )
+    .await;
+    let base = format!(
+        "/channels/{}/messages/{}",
+        c.general,
+        m["id"].as_str().unwrap()
+    );
+    let (s, _) = app
+        .req(
+            axum::http::Method::PUT,
+            &format!("{base}/reactions/party_blob:{id}/@me"),
+            Some(&c.member),
+            None,
+        )
+        .await;
+    assert_eq!(s, StatusCode::NO_CONTENT);
+    let (s, _) = app
+        .req(
+            axum::http::Method::PUT,
+            &format!("{base}/reactions/fake:123/@me"),
+            Some(&c.member),
+            None,
+        )
+        .await;
+    assert_eq!(s, StatusCode::BAD_REQUEST);
+
+    let (s, renamed) = app
+        .patch(&format!("{path}/{id}"), &c.owner, json!({ "name": "blob" }))
+        .await;
+    assert_eq!(s, StatusCode::OK);
+    assert_eq!(renamed["name"], "blob");
+    let (s, _) = app.delete(&format!("{path}/{id}"), &c.owner).await;
+    assert_eq!(s, StatusCode::NO_CONTENT);
+    let (s, _, _) = raw_get(app, &format!("/cdn/emojis/{id}")).await;
+    assert_eq!(s, StatusCode::NOT_FOUND);
+}

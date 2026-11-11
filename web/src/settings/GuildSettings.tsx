@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { X } from 'lucide-react';
-import { ApiError, http } from '../api/client';
+import { API_BASE, ApiError, http } from '../api/client';
 import { errorText } from '../api/errors';
 import type { GuildBase, Invite } from '../api/types';
 import { GuildIcon } from '../components/GuildIcon';
@@ -141,11 +141,82 @@ function Invites({ guildId }: { guildId: string }) {
   );
 }
 
+function Emojis({ guildId }: { guildId: string }) {
+  const emojis = useData((s) => s.emojis[guildId]) ?? [];
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const upload = async () => {
+    const file = await pickImage();
+    if (!file) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const image = await fileToImageDataUri(file, 128, 128);
+      const base = file.name.replace(/\.[^.]+$/, '').replace(/[^a-zA-Z0-9_]/g, '_').slice(0, 32);
+      const name = base.length >= 2 ? base : `emoji_${emojis.length + 1}`;
+      await http.post(`/guilds/${guildId}/emojis`, { name, image });
+    } catch (err) {
+      setError(err instanceof ApiError ? err.text() ?? null : errorText((err as Error).message));
+    } finally {
+      setBusy(false);
+    }
+  };
+  const rename = async (id: string, name: string) => {
+    try {
+      await http.patch(`/guilds/${guildId}/emojis/${id}`, { name });
+    } catch (err) {
+      reportError(err);
+    }
+  };
+  return (
+    <>
+      <SectionTitle>Emoji</SectionTitle>
+      <p className="mb-4 text-sm text-muted">
+        Eigene Emojis können alle Mitglieder in jedem Server und in Reaktionen verwenden – ohne Abo. Erlaubt sind PNG, JPEG, GIF und WebP bis 256 KB. Namen bestehen aus
+        Buchstaben, Zahlen und Unterstrichen.
+      </p>
+      <div className="mb-2 flex items-center gap-3">
+        <Button onClick={upload} loading={busy} disabled={emojis.length >= 50}>
+          Emoji hochladen
+        </Button>
+        <span className="text-sm text-muted">{emojis.length} von 50 Plätzen belegt</span>
+      </div>
+      {error && <p className="mb-2 text-sm text-[#fa777c]">{error}</p>}
+      <div className="mt-4 divide-y divide-divider border-y border-divider">
+        {emojis.map((e) => (
+          <div key={e.id} className="group flex items-center gap-4 py-2">
+            <img src={`${API_BASE}/cdn/emojis/${e.id}`} alt={e.name} className="size-8 object-contain" />
+            <span className="text-muted">:</span>
+            <input
+              defaultValue={e.name}
+              aria-label="Emoji-Name"
+              maxLength={32}
+              onBlur={(ev) => ev.target.value !== e.name && void rename(e.id, ev.target.value)}
+              onKeyDown={(ev) => ev.key === 'Enter' && (ev.target as HTMLInputElement).blur()}
+              className="h-8 w-56 rounded bg-transparent px-2 text-text outline-none hover:bg-input-strong focus:bg-input-strong"
+            />
+            <span className="text-muted">:</span>
+            <button
+              aria-label="Emoji löschen"
+              onClick={() => void http.delete(`/guilds/${guildId}/emojis/${e.id}`).catch(reportError)}
+              className="invisible ml-auto flex size-6 items-center justify-center rounded-full bg-danger text-white group-hover:visible [@media(hover:none)]:visible"
+            >
+              <X size={14} />
+            </button>
+          </div>
+        ))}
+        {emojis.length === 0 && <p className="py-6 text-center text-sm text-muted">Noch keine eigenen Emojis.</p>}
+      </div>
+    </>
+  );
+}
+
 export default function GuildSettings({ onClose, guildId, section }: { onClose: () => void; guildId: string; section?: string }) {
   const navigate = useNavigate();
   const guild = useData((s) => s.guilds[guildId]);
   const isOwner = useData((s) => s.me?.id === s.guilds[guildId]?.owner_id);
   const canManage = useCan(guildId, P.MANAGE_GUILD);
+  const canEmojis = useCan(guildId, P.MANAGE_EMOJIS);
   const [active, setActive] = useState(section ?? 'overview');
   useEffect(() => {
     if (!guild) onClose();
@@ -155,6 +226,7 @@ export default function GuildSettings({ onClose, guildId, section }: { onClose: 
   const nav: NavEntry[] = [
     { id: 'h', label: guild.name, header: true },
     { id: 'overview', label: 'Übersicht' },
+    ...(canEmojis ? [{ id: 'emojis', label: 'Emoji' }] : []),
     ...(canManage ? [{ id: 'invites', label: 'Einladungen' }] : []),
     ...(isOwner
       ? [
@@ -185,6 +257,7 @@ export default function GuildSettings({ onClose, guildId, section }: { onClose: 
     <SettingsLayout nav={nav} active={active} onSelect={setActive} onClose={onClose}>
       {active === 'overview' && <Overview guildId={guildId} />}
       {active === 'invites' && <Invites guildId={guildId} />}
+      {active === 'emojis' && <Emojis guildId={guildId} />}
     </SettingsLayout>
   );
 }

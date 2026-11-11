@@ -1,11 +1,15 @@
 import { useMemo, useState } from 'react';
 import { Search } from 'lucide-react';
+import type { CustomEmoji } from '../../api/types';
 import { EMOJI_CATEGORIES, recentEmojis, searchEmojis, type EmojiEntry } from '../../lib/emoji';
+import { EmojiGlyph } from '../../lib/markdown';
+import { useData } from '../../stores/data';
 import { Popout } from '../ui/Popout';
 
 interface Props {
   anchor: DOMRect;
-  onSelect: (emoji: string) => void;
+  /** Unicode emoji, or for custom emojis `name:id` plus the emoji itself. */
+  onSelect: (emoji: string, custom?: CustomEmoji) => void;
   onClose: () => void;
   placement?: 'top' | 'bottom' | 'left' | 'right';
   align?: 'start' | 'end' | 'center';
@@ -23,7 +27,7 @@ function Grid({ items, onSelect, onHover }: { items: EmojiEntry[]; onSelect: (e:
           onClick={() => onSelect(e[0])}
           className="flex size-10 items-center justify-center rounded text-2xl hover:bg-hover"
         >
-          {e[0]}
+          <EmojiGlyph emoji={e[0]} size={24} />
         </button>
       ))}
     </div>
@@ -36,10 +40,45 @@ export function EmojiPicker({ anchor, onSelect, onClose, placement = 'top', alig
   const recent = useMemo(() => recentEmojis(), []);
   const results = useMemo(() => searchEmojis(query, 120), [query]);
   const lookup = useMemo(() => new Map(EMOJI_CATEGORIES.flatMap((c) => c.emojis).map((e) => [e[0], e])), []);
+  const guilds = useData((s) => s.guilds);
+  const allCustom = useData((s) => s.emojis);
+  const currentGuild = location.pathname.split('/')[2];
+  const customGroups = useMemo(
+    () =>
+      Object.entries(allCustom)
+        .filter(([, list]) => list.length)
+        .sort(([a], [b]) => Number(b === currentGuild) - Number(a === currentGuild))
+        .map(([gid, list]) => ({ name: guilds[gid]?.name ?? 'Server', list })),
+    [allCustom, guilds, currentGuild],
+  );
+  const customMatches = useMemo(() => {
+    const q = query.toLowerCase().replace(/^:/, '');
+    return q ? Object.values(allCustom).flat().filter((e) => e.name.toLowerCase().includes(q)).slice(0, 40) : [];
+  }, [allCustom, query]);
   const pick = (e: string) => {
     onSelect(e);
     onClose();
   };
+  const pickCustom = (e: CustomEmoji) => {
+    onSelect(`${e.name}:${e.id}`, e);
+    onClose();
+  };
+  const customGrid = (list: CustomEmoji[]) => (
+    <div className="grid grid-cols-8 gap-0.5">
+      {list.map((e) => (
+        <button
+          key={e.id}
+          type="button"
+          aria-label={e.name}
+          onMouseEnter={() => setHovered([`${e.name}:${e.id}`, e.name])}
+          onClick={() => pickCustom(e)}
+          className="flex size-10 items-center justify-center rounded hover:bg-hover"
+        >
+          <EmojiGlyph emoji={`${e.name}:${e.id}`} size={28} />
+        </button>
+      ))}
+    </div>
+  );
   return (
     <Popout anchor={anchor} placement={placement} align={align} onClose={onClose} className="flex h-[420px] w-[360px] max-w-[calc(100vw-16px)] flex-col overflow-hidden">
       <div className="p-2 pb-1">
@@ -58,8 +97,11 @@ export function EmojiPicker({ anchor, onSelect, onClose, placement = 'top', alig
       </div>
       <div className="scroller-thin flex-1 px-2">
         {query ? (
-          results.length ? (
-            <Grid items={results} onSelect={pick} onHover={setHovered} />
+          results.length || customMatches.length ? (
+            <>
+              {customMatches.length > 0 && customGrid(customMatches)}
+              <Grid items={results} onSelect={pick} onHover={setHovered} />
+            </>
           ) : (
             <p className="py-8 text-center text-sm text-muted">Keine Emojis gefunden</p>
           )
@@ -71,6 +113,12 @@ export function EmojiPicker({ anchor, onSelect, onClose, placement = 'top', alig
                 <Grid items={recent.map((r) => lookup.get(r) ?? [r, r])} onSelect={pick} onHover={setHovered} />
               </section>
             )}
+            {customGroups.map((g) => (
+              <section key={g.name}>
+                <h4 className="sticky top-0 z-10 bg-floating py-1.5 text-xs font-semibold uppercase text-muted">{g.name}</h4>
+                {customGrid(g.list)}
+              </section>
+            ))}
             {EMOJI_CATEGORIES.map((c) => (
               <section key={c.name}>
                 <h4 className="sticky top-0 z-10 bg-floating py-1.5 text-xs font-semibold uppercase text-muted">{c.name}</h4>
@@ -83,7 +131,7 @@ export function EmojiPicker({ anchor, onSelect, onClose, placement = 'top', alig
       <div className="flex h-11 shrink-0 items-center gap-2 bg-sidebar px-3 text-sm text-header">
         {hovered && (
           <>
-            <span className="text-2xl">{hovered[0]}</span>:{hovered[1]}:
+            <EmojiGlyph emoji={hovered[0]} size={24} />:{hovered[1]}:
           </>
         )}
       </div>

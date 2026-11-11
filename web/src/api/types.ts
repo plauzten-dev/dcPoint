@@ -79,7 +79,15 @@ export interface GuildBase {
   created_at: string;
 }
 
+export interface CustomEmoji {
+  id: Snowflake;
+  guild_id: Snowflake;
+  name: string;
+  animated: boolean;
+}
+
 export interface GuildPayload extends GuildBase {
+  emojis: CustomEmoji[];
   roles: Role[];
   channels: Channel[];
   member_count: number;

@@ -144,3 +144,38 @@ pub async fn proxy(
     );
     Ok(res)
 }
+
+/// Custom emoji images (`/cdn/emojis/{id}` or `/cdn/emojis/{id}.png`).
+pub async fn emoji(
+    State(state): State<AppState>,
+    ApiPath(emoji): ApiPath<String>,
+) -> ApiResult<Response> {
+    let id: i64 = emoji
+        .split('.')
+        .next()
+        .unwrap_or_default()
+        .parse()
+        .map_err(|_| ApiError::NotFound("UNKNOWN_EMOJI"))?;
+    let data = state
+        .storage
+        .get(&format!("emojis/{id}"))
+        .await?
+        .ok_or(ApiError::NotFound("UNKNOWN_EMOJI"))?;
+    let mime = sniff_image(&data).unwrap_or("application/octet-stream");
+    let mut res = data.into_response();
+    let h = res.headers_mut();
+    h.insert(header::CONTENT_TYPE, HeaderValue::from_static(mime));
+    h.insert(
+        header::CACHE_CONTROL,
+        HeaderValue::from_static("public, max-age=31536000, immutable"),
+    );
+    h.insert(
+        header::X_CONTENT_TYPE_OPTIONS,
+        HeaderValue::from_static("nosniff"),
+    );
+    h.insert(
+        header::CONTENT_SECURITY_POLICY,
+        HeaderValue::from_static("default-src 'none'"),
+    );
+    Ok(res)
+}

@@ -29,6 +29,18 @@ const messages: Record<string, string> = {
   PAYLOAD_TOO_LARGE: 'Die Datei ist zu groß.',
   NETWORK: 'Keine Verbindung zum Server.',
   UNAUTHORIZED: 'Bitte melde dich erneut an.',
+  EMPTY_MESSAGE: 'Die Nachricht ist leer.',
+  UNKNOWN_MESSAGE: 'Diese Nachricht existiert nicht mehr.',
+  CANNOT_EDIT_OTHERS_MESSAGE: 'Du kannst nur deine eigenen Nachrichten bearbeiten.',
+  TOO_MANY_FILES: 'Höchstens 10 Dateien pro Nachricht.',
+  INVALID_EMOJI: 'Ungültiges Emoji.',
+  UNKNOWN_EMOJI: 'Dieses Emoji gibt es nicht mehr.',
+  TOO_MANY_REACTIONS: 'Diese Nachricht hat bereits 20 verschiedene Reaktionen.',
+  TOO_MANY_PINS: 'In diesem Kanal sind bereits 50 Nachrichten angepinnt.',
+  EMOJI_NAME_INVALID: '2–32 Zeichen: Buchstaben, Zahlen und Unterstriche.',
+  EMOJI_NAME_TAKEN: 'Dieser Name ist auf dem Server bereits vergeben.',
+  TOO_MANY_EMOJIS: 'Dieser Server hat bereits 50 eigene Emojis.',
+  CANNOT_SEND_IN_CATEGORY: 'In Kategorien kann man keine Nachrichten senden.',
 };
 
 export function errorText(code: string | undefined): string {

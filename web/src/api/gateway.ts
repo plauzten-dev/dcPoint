@@ -4,7 +4,7 @@ import { gatewayUrl } from './client';
 import { ackChannel, mentionsMe, viewing } from '../lib/readState';
 import { useMessages } from '../stores/messages';
 import { useTyping } from '../stores/typing';
-import type { Channel, GuildBase, GuildPayload, Member, Message, Presence, PrivateUser, ReactionCount, ReadyPayload, User } from './types';
+import type { Channel, CustomEmoji, GuildBase, GuildPayload, Member, Message, Presence, PrivateUser, ReactionCount, ReadyPayload, User } from './types';
 
 const Op = {
   Dispatch: 0,
@@ -231,6 +231,11 @@ function handleDispatch(t: string, d: unknown) {
     case 'TYPING_START': {
       const { channel_id, user_id } = d as { channel_id: string; user_id: string };
       if (user_id !== s.me?.id) useTyping.getState().start(channel_id, user_id);
+      break;
+    }
+    case 'GUILD_EMOJIS_UPDATE': {
+      const { guild_id, emojis } = d as { guild_id: string; emojis: CustomEmoji[] };
+      s.setEmojis(guild_id, emojis);
       break;
     }
     case 'CHANNEL_PINS_UPDATE':

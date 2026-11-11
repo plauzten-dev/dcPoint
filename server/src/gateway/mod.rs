@@ -10,7 +10,7 @@ use serde::Serialize;
 
 use crate::access::{GuildMembersAccess, load_overwrites};
 use crate::error::ApiResult;
-use crate::models::{Channel, GuildPayload, GuildRow, Presence, Role, UserRow};
+use crate::models::{Channel, Emoji, GuildPayload, GuildRow, Presence, Role, UserRow};
 use crate::permissions::{self, MemberContext, RoleInfo};
 use crate::snowflake::Id;
 use crate::state::AppState;
@@ -35,6 +35,7 @@ pub mod events {
     pub const MESSAGE_ACK: &str = "MESSAGE_ACK";
     pub const CHANNEL_PINS_UPDATE: &str = "CHANNEL_PINS_UPDATE";
     pub const TYPING_START: &str = "TYPING_START";
+    pub const GUILD_EMOJIS_UPDATE: &str = "GUILD_EMOJIS_UPDATE";
 }
 
 impl AppState {
@@ -186,6 +187,15 @@ impl AppState {
             .map(|(g, j, t, r)| (g, (j, t, r.unwrap_or_default())))
             .collect();
 
+        let mut emojis_by_guild: HashMap<Id, Vec<Emoji>> = HashMap::new();
+        for e in
+            sqlx::query_as::<_, Emoji>("SELECT * FROM emojis WHERE guild_id = ANY($1) ORDER BY id")
+                .bind(&ids)
+                .fetch_all(db)
+                .await?
+        {
+            emojis_by_guild.entry(e.guild_id).or_default().push(e);
+        }
         let mut roles_by_guild: HashMap<Id, Vec<Role>> = HashMap::new();
         for r in roles {
             roles_by_guild.entry(r.guild_id).or_default().push(r);
@@ -231,7 +241,9 @@ impl AppState {
                     )
                 })
                 .collect();
+            let emojis = emojis_by_guild.remove(&guild.id).unwrap_or_default();
             out.push(GuildPayload {
+                emojis,
                 member_count: counts.get(&guild.id).copied().unwrap_or(0),
                 guild,
                 roles,

@@ -6,6 +6,7 @@ import { ChannelType, type Channel } from '../../api/types';
 import { reportError } from '../../lib/actions';
 import { cn } from '../../lib/cn';
 import { searchEmojis } from '../../lib/emoji';
+import { EmojiGlyph } from '../../lib/markdown';
 import { has, P } from '../../lib/permissions';
 import { sendMessage, type OutgoingFile } from '../../lib/send';
 import { formatBytes } from '../../lib/time';
@@ -59,7 +60,8 @@ type Suggestion =
   | { kind: 'role'; id: string; label: string; insert: string; raw: string; color?: string }
   | { kind: 'special'; id: string; label: string; insert: string; sub: string }
   | { kind: 'channel'; id: string; label: string; insert: string; raw: string }
-  | { kind: 'emoji'; id: string; label: string; insert: string };
+  | { kind: 'emoji'; id: string; label: string; insert: string }
+  | { kind: 'custom'; id: string; label: string; insert: string; raw: string };
 
 interface Props {
   channel: Channel;
@@ -84,6 +86,7 @@ export function Composer({ channel, perms, info }: Props) {
   const pendingCaret = useRef<number | null>(null);
   const lastTyping = useRef(0);
   const channels = useData((s) => (channel.guild_id ? s.channels[channel.guild_id] : undefined));
+  const customEmojis = useData((s) => s.emojis);
   const canSend = has(perms, P.SEND_MESSAGES);
   const canAttach = has(perms, P.ATTACH_FILES);
   const canEveryone = has(perms, P.MENTION_EVERYONE);
@@ -142,8 +145,13 @@ export function Composer({ channel, perms, info }: Props) {
         .slice(0, 10)
         .map((c) => ({ kind: 'channel', id: c.id, label: c.name, insert: `#${c.name}`, raw: `<#${c.id}>` }));
     }
-    return searchEmojis(q, 10).map(([e, name]) => ({ kind: 'emoji', id: name, label: `:${name}:`, insert: e }));
-  }, [trigger, dismissed, info, channels, canEveryone, channel.guild_id]);
+    const custom: Suggestion[] = Object.values(customEmojis)
+      .flat()
+      .filter((e) => e.name.toLowerCase().startsWith(q))
+      .slice(0, 5)
+      .map((e) => ({ kind: 'custom', id: e.id, label: `:${e.name}:`, insert: `:${e.name}:`, raw: `<${e.animated ? 'a' : ''}:${e.name}:${e.id}>` }));
+    return [...custom, ...searchEmojis(q, 10 - custom.length).map(([e, name]): Suggestion => ({ kind: 'emoji', id: name, label: `:${name}:`, insert: e }))];
+  }, [trigger, dismissed, info, channels, canEveryone, channel.guild_id, customEmojis]);
 
   useEffect(() => setActive(0), [suggestions.length, trigger?.query]);
 
@@ -263,6 +271,7 @@ export function Composer({ channel, perms, info }: Props) {
               {s.kind === 'user' && <Avatar user={s.avatar} size={24} />}
               {s.kind === 'channel' && <Hash size={18} className="text-icon-muted" />}
               {s.kind === 'emoji' && <span className="text-xl">{s.insert}</span>}
+              {s.kind === 'custom' && <EmojiGlyph emoji={`${s.label.slice(1, -1)}:${s.id}`} size={22} />}
               <span className="truncate text-sm font-medium text-header" style={s.kind === 'role' ? { color: s.color } : undefined}>
                 {s.kind === 'role' ? `@${s.label}` : s.label}
               </span>
@@ -377,11 +386,14 @@ export function Composer({ channel, perms, info }: Props) {
         <EmojiPicker
           anchor={emojiAnchor}
           onClose={() => setEmojiAnchor(null)}
-          onSelect={(emoji) => {
+          onSelect={(emoji, custom) => {
             const el = ref.current;
             const start = el?.selectionStart ?? value.length;
             const end = el?.selectionEnd ?? value.length;
-            insertAt(start, end, emoji);
+            if (custom) {
+              tokens.current.set(`:${custom.name}:`, `<${custom.animated ? 'a' : ''}:${custom.name}:${custom.id}>`);
+              insertAt(start, end, `:${custom.name}:`);
+            } else insertAt(start, end, emoji);
           }}
         />
       )}

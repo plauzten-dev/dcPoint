@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { isNewer } from '../lib/snowflake';
-import type { Channel, Guild, GuildBase, GuildPayload, Presence, PrivateUser, ReadyPayload, Role, User } from '../api/types';
+import type { Channel, CustomEmoji, Guild, GuildBase, GuildPayload, Presence, PrivateUser, ReadyPayload, Role, User } from '../api/types';
 
 export type ConnectionState = 'connecting' | 'ready' | 'reconnecting';
 
@@ -10,6 +10,8 @@ interface DataState {
   guildOrder: string[];
   guilds: Record<string, Guild>;
   roles: Record<string, Record<string, Role>>;
+  /** Custom emojis per guild. */
+  emojis: Record<string, CustomEmoji[]>;
   /** Channels grouped by guild id. */
   channels: Record<string, Record<string, Channel>>;
   channelGuild: Record<string, string>;
@@ -28,6 +30,7 @@ interface DataState {
   setPresence(p: Presence): void;
   upsertUser(u: User): void;
   setMe(u: PrivateUser): void;
+  setEmojis(guildId: string, emojis: CustomEmoji[]): void;
   /** Records a new message in a channel (unread tracking). */
   bumpLastMessage(channelId: string, messageId: string): void;
   markRead(channelId: string, messageId: string): void;
@@ -36,7 +39,7 @@ interface DataState {
 }
 
 function splitGuild(p: GuildPayload) {
-  const { roles, channels, ...guild } = p;
+  const { roles, channels, emojis: _emojis, ...guild } = p;
   return {
     guild: guild as Guild,
     roles: Object.fromEntries(roles.map((r) => [r.id, r])),
@@ -58,6 +61,7 @@ const initial = {
   guildOrder: [],
   guilds: {},
   roles: {},
+  emojis: {},
   channels: {},
   channelGuild: {},
   presences: {},
@@ -74,12 +78,14 @@ export const useData = create<DataState>()((set) => ({
     set(() => {
       const guilds: DataState['guilds'] = {};
       const roles: DataState['roles'] = {};
+      const emojis: DataState['emojis'] = {};
       const channels: DataState['channels'] = {};
       const channelGuild: DataState['channelGuild'] = {};
       for (const g of p.guilds) {
         const s = splitGuild(g);
         guilds[g.id] = s.guild;
         roles[g.id] = s.roles;
+        emojis[g.id] = g.emojis ?? [];
         channels[g.id] = s.channels;
         for (const c of g.channels) channelGuild[c.id] = g.id;
       }
@@ -91,6 +97,7 @@ export const useData = create<DataState>()((set) => ({
         guildOrder: order,
         guilds,
         roles,
+        emojis,
         channels,
         channelGuild,
         presences: withSelfPresence(Object.fromEntries(p.presences.map((x) => [x.user_id, x])), p.user),
@@ -109,6 +116,7 @@ export const useData = create<DataState>()((set) => ({
       return {
         guilds: { ...s.guilds, [p.id]: split.guild },
         roles: { ...s.roles, [p.id]: split.roles },
+        emojis: { ...s.emojis, [p.id]: p.emojis ?? [] },
         channels: { ...s.channels, [p.id]: split.channels },
         channelGuild,
         guildOrder,
@@ -182,6 +190,8 @@ export const useData = create<DataState>()((set) => ({
       const cur = s.readStates[channelId] ?? { last: '0', mentions: 0 };
       return { readStates: { ...s.readStates, [channelId]: { ...cur, mentions: cur.mentions + 1 } } };
     }),
+
+  setEmojis: (guildId, emojis) => set((s) => ({ emojis: { ...s.emojis, [guildId]: emojis } })),
 
   reset: () => set({ ...initial }),
 }));

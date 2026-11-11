@@ -118,3 +118,31 @@ test('history pagination keeps loading older messages', async ({ page, request }
   await list.evaluate((el) => el.scrollTo(0, 0));
   await expect(page.getByTestId('channel-welcome')).toBeVisible();
 });
+
+test('custom emojis: upload, use in messages and reactions', async ({ page }) => {
+  const { register } = await import('./helpers');
+  await register(page, 'Emo');
+  await createGuild(page, 'Emojiland');
+  await page.getByTestId('guild-header').click();
+  await page.getByRole('menuitem', { name: 'Servereinstellungen' }).click();
+  await page.getByRole('button', { name: 'Emoji', exact: true }).click();
+  const chooser = page.waitForEvent('filechooser');
+  await page.getByRole('button', { name: 'Emoji hochladen' }).click();
+  await (await chooser).setFiles({ name: 'party_blob.png', mimeType: 'image/png', buffer: PNG });
+  await expect(page.getByLabel('Emoji-Name')).toHaveValue('party_blob');
+  await page.keyboard.press('Escape');
+
+  const box = page.locator('[data-composer]');
+  await box.fill('Feier :party');
+  await expect(page.getByRole('option', { name: ':party_blob:' })).toBeVisible();
+  await box.press('Enter');
+  await box.press('Enter');
+  const msg = messages(page).last();
+  await expect(msg.locator('img.md-emoji[alt=":party_blob:"]')).toBeVisible();
+
+  await msg.hover();
+  await page.getByRole('button', { name: 'Reaktion hinzufügen' }).first().click();
+  await page.getByLabel('Emoji suchen').fill('party');
+  await page.getByRole('button', { name: 'party_blob' }).first().click();
+  await expect(msg.getByRole('button', { name: /party_blob:\d+ 1/ })).toBeVisible();
+});

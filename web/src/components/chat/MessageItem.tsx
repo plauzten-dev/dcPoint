@@ -5,7 +5,7 @@ import type { Attachment, Message } from '../../api/types';
 import { reportError } from '../../lib/actions';
 import { cn } from '../../lib/cn';
 import { copyText } from '../../lib/format';
-import { isJumbo, renderMarkdown, type MarkdownContext } from '../../lib/markdown';
+import { EmojiGlyph, isJumbo, renderMarkdown, type MarkdownContext } from '../../lib/markdown';
 import { discardFailed, retryMessage } from '../../lib/send';
 import { fullTimestamp, messageTimestamp, shortTime } from '../../lib/time';
 import { useChatUi } from '../../stores/chatUi';
@@ -261,7 +261,7 @@ export const MessageItem = memo(function MessageItem(p: ItemProps) {
                 r.me ? 'border-brand bg-brand/15 text-header' : 'border-transparent bg-sidebar text-muted hover:border-icon-muted/40',
               )}
             >
-              <span className="text-base leading-none">{r.emoji}</span>
+              <EmojiGlyph emoji={r.emoji} size={16} />
               <span className="font-semibold tabular-nums">{r.count}</span>
             </button>
           ))}

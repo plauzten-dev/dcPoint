@@ -794,6 +794,15 @@ pub async fn add_reaction(
     if !valid_emoji(&emoji) {
         return Err(ApiError::BadRequest("INVALID_EMOJI"));
     }
+    if let Some((_, id)) = emoji.split_once(':') {
+        let exists: bool = sqlx::query_scalar("SELECT EXISTS (SELECT 1 FROM emojis WHERE id = $1)")
+            .bind(id.parse::<i64>().unwrap_or_default())
+            .fetch_one(&state.db)
+            .await?;
+        if !exists {
+            return Err(ApiError::BadRequest("UNKNOWN_EMOJI"));
+        }
+    }
     let (channel, access) = channel_access(&state.db, channel_id, auth.user_id).await?;
     let perms = access.channel_permissions(&channel);
     require(perms, permissions::READ_MESSAGE_HISTORY)?;
