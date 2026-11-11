@@ -20,7 +20,7 @@ const PNG: &[u8] = &[
 async fn site() -> String {
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
     let addr = listener.local_addr().unwrap();
-    let html = format!(
+    let html = String::from(
         r##"<html><head><title>Ignoriert</title>
         <meta property="og:title" content="dcPoint &amp; Freunde">
         <meta property="og:description" content="Eine Vorschau">
