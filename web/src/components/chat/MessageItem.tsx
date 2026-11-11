@@ -1,5 +1,5 @@
 import { memo, useEffect, useRef, useState, type MouseEvent } from 'react';
-import { Copy, Hash, Link, Pencil, Pin, PinOff, RefreshCw, Reply, SmilePlus, Trash2, Ellipsis } from 'lucide-react';
+import { Copy, Hash, Link, MessagesSquare, Pencil, Pin, PinOff, RefreshCw, Reply, SmilePlus, Trash2, Ellipsis } from 'lucide-react';
 import { http } from '../../api/client';
 import type { Attachment, Message } from '../../api/types';
 import { reportError } from '../../lib/actions';
@@ -10,13 +10,18 @@ import { discardFailed, retryMessage } from '../../lib/send';
 import { fullTimestamp, messageTimestamp, shortTime } from '../../lib/time';
 import { useChatUi } from '../../stores/chatUi';
 import { useMessages } from '../../stores/messages';
-import { useOverlay, type MenuEntry } from '../../stores/overlay';
+import { openModal, useOverlay, type MenuEntry } from '../../stores/overlay';
 import { Avatar } from '../ui/Avatar';
 import { Tooltip } from '../ui/Tooltip';
 import { copyMessageLink, deleteMessage, replyTo, startEdit, togglePin, toggleReaction, type AuthorInfo } from './actions';
 import { Attachments } from './Attachments';
 import { Embeds } from './Embeds';
 import { MAX_LENGTH } from './Composer';
+
+function threadName(content: string): string {
+  const plain = content.replace(/<[@#][!&]?\d+>|<a?:\w+:\d+>|[*_~`|>]/g, '').replace(/\s+/g, ' ').trim();
+  return plain.length > 40 ? `${plain.slice(0, 40).trimEnd()}…` : plain || 'Neuer Thread';
+}
 
 /** Single-line preview with mentions resolved (used for reply previews). */
 function plainText(src: string, md: MarkdownContext): string {
@@ -45,6 +50,9 @@ export interface ItemProps {
   onReactPicker: (m: Message, rect: DOMRect) => void;
   onOpenImage: (a: Attachment) => void;
   onJump: (id: string) => void;
+  onOpenThread: (id: string) => void;
+  /** May start a thread from this message (text channels only). */
+  canThread: boolean;
 }
 
 function InlineEditor({ message }: { message: Message }) {
@@ -137,6 +145,9 @@ export const MessageItem = memo(function MessageItem(p: ItemProps) {
       { label: 'Reaktion hinzufügen', icon: <SmilePlus size={16} />, disabled: !p.canReact, onClick: () => p.onReactPicker(m, new DOMRect(x, y, 0, 0)) },
       ...(isMine ? [{ label: 'Nachricht bearbeiten', icon: <Pencil size={16} />, onClick: () => startEdit(m) }] : []),
       { label: 'Antworten', icon: <Reply size={16} />, disabled: !p.canSend, onClick: () => replyTo(m) },
+      ...(p.canThread && !m.thread
+        ? [{ label: 'Thread erstellen', icon: <MessagesSquare size={16} />, onClick: () => openModal({ type: 'createThread', channelId: m.channel_id, messageId: m.id, defaultName: threadName(m.content) }) }]
+        : []),
       ...(p.canManage ? [{ label: m.pinned ? 'Nachricht loslösen' : 'Nachricht anpinnen', icon: m.pinned ? <PinOff size={16} /> : <Pin size={16} />, onClick: () => void togglePin(m) }] : []),
       { separator: true },
       { label: 'Text kopieren', icon: <Copy size={16} />, disabled: !m.content, onClick: () => void copyText(m.content) },
@@ -229,6 +240,21 @@ export const MessageItem = memo(function MessageItem(p: ItemProps) {
       {editing ? <InlineEditor message={m} /> : content}
       <Attachments items={m.attachments} onOpenImage={p.onOpenImage} />
       <Embeds items={m.embeds} />
+      {m.thread && (
+        <button
+          onClick={() => p.onOpenThread(m.thread!.id)}
+          className="mt-1.5 flex w-[min(400px,100%)] items-center gap-2 rounded-lg border border-divider bg-sidebar px-3 py-2 text-left hover:bg-hover"
+        >
+          <MessagesSquare size={18} className="shrink-0 text-icon" />
+          <span className="min-w-0 flex-1">
+            <span className="block truncate text-sm font-semibold text-header">{m.thread.name}</span>
+            <span className="text-xs text-link">
+              {m.thread.message_count} {m.thread.message_count === 1 ? 'Nachricht' : 'Nachrichten'}
+              {m.thread.archived && <span className="ml-1 text-muted">· archiviert</span>}
+            </span>
+          </span>
+        </button>
+      )}
       {m.progress !== undefined && pending && (
         <div className="mt-1 h-1.5 w-60 max-w-full overflow-hidden rounded bg-input">
           <div className="h-full bg-brand transition-[width]" style={{ width: `${Math.round(m.progress * 100)}%` }} />

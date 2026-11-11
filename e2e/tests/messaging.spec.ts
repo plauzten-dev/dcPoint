@@ -146,3 +146,33 @@ test('custom emojis: upload, use in messages and reactions', async ({ page }) =>
   await page.getByRole('button', { name: 'party_blob' }).first().click();
   await expect(msg.getByRole('button', { name: /party_blob:\d+ 1/ })).toBeVisible();
 });
+
+test('threads: start from a message, chat inside, archive', async ({ page }) => {
+  const { register } = await import('./helpers');
+  await register(page, 'Thea');
+  await createGuild(page, 'Fäden');
+  await send(page, 'Wie organisieren wir das Sommerfest?');
+  const starter = messages(page).filter({ hasText: 'Sommerfest' });
+  await starter.click({ button: 'right' });
+  await page.getByRole('menuitem', { name: 'Thread erstellen' }).click();
+  await expect(page.locator('#thread-name')).toHaveValue('Wie organisieren wir das Sommerfest?');
+  await page.locator('#thread-name').fill('Sommerfest');
+  await page.getByRole('dialog').getByRole('button', { name: 'Erstellen' }).click();
+
+  // inside the thread: header, starter message on top
+  await expect(page.getByRole('heading', { name: 'Sommerfest', level: 1 })).toBeVisible();
+  await expect(page.getByTestId('channel-welcome')).toContainText('Wie organisieren wir das Sommerfest?');
+  await send(page, 'Ich bringe Kuchen mit 🎂');
+  await expect(messages(page).filter({ hasText: 'Kuchen' })).toBeVisible();
+
+  // sidebar + starter chip in the parent channel
+  await expect(page.getByTestId('thread-Sommerfest')).toBeVisible();
+  await page.getByTestId('channel-allgemein').click();
+  await expect(starter.getByRole('button', { name: /Sommerfest\s*1 Nachricht/ })).toBeVisible();
+
+  // archive hides it from the sidebar
+  await starter.getByRole('button', { name: /Sommerfest/ }).click();
+  await page.getByRole('button', { name: 'Thread archivieren' }).click();
+  await expect(page.getByTestId('thread-Sommerfest')).toHaveCount(0);
+  await expect(page.getByText('Archiviert', { exact: true })).toBeVisible();
+});

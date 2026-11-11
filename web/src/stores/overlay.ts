@@ -22,7 +22,8 @@ export type ModalSpec =
   | { type: 'quickSwitcher' }
   | { type: 'userSettings'; section?: string }
   | { type: 'guildSettings'; guildId: string; section?: string }
-  | { type: 'channelSettings'; channelId: string };
+  | { type: 'channelSettings'; channelId: string }
+  | { type: 'createThread'; channelId: string; messageId?: string; defaultName?: string };
 
 export interface Toast {
   id: number;

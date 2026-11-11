@@ -247,7 +247,7 @@ export function Composer({ channel, perms, info }: Props) {
   };
 
   const replyAuthor = replyTo?.author ? info.info(replyTo.author.id, replyTo.author) : null;
-  const placeholder = canSend ? `Nachricht an #${channel.name}` : 'Du hast keine Berechtigung, in diesem Kanal Nachrichten zu senden.';
+  const placeholder = canSend ? `Nachricht an ${channel.type === 11 ? '' : '#'}${channel.name}` : 'Du hast keine Berechtigung, in diesem Kanal Nachrichten zu senden.';
 
   return (
     <div className="relative shrink-0 px-4 max-md:px-2">

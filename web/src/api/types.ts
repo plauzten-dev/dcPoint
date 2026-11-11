@@ -44,6 +44,7 @@ export const ChannelType = {
   GuildVoice: 2,
   GroupDM: 3,
   GuildCategory: 4,
+  PublicThread: 11,
 } as const;
 export type ChannelTypeValue = (typeof ChannelType)[keyof typeof ChannelType];
 
@@ -67,6 +68,10 @@ export interface Channel {
   user_limit: number | null;
   rate_limit_per_user: number;
   last_message_id: Snowflake | null;
+  owner_id: Snowflake | null;
+  thread_message_id: Snowflake | null;
+  archived: boolean;
+  message_count: number;
   permission_overwrites: PermissionOverwrite[];
 }
 
@@ -199,6 +204,7 @@ export interface Message {
   reactions?: ReactionCount[];
   reply_to_id: Snowflake | null;
   referenced_message: ReferencedMessage | null;
+  thread: { id: Snowflake; name: string; message_count: number; archived: boolean } | null;
   flags: number;
   nonce?: string;
   /** Client-only: optimistic message state. */

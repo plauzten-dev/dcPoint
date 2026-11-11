@@ -80,6 +80,7 @@ export async function sendMessage(out: Outgoing): Promise<void> {
     embeds: [],
     reactions: [],
     reply_to_id: out.replyTo?.id ?? null,
+    thread: null,
     referenced_message: out.replyTo
       ? { id: out.replyTo.id, author: out.replyTo.author, content: out.replyTo.content, has_attachments: out.replyTo.attachments.length > 0 }
       : null,

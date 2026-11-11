@@ -1,4 +1,4 @@
-import { createContext, memo, useContext, useState, type DragEvent, type MouseEvent } from 'react';
+import { createContext, Fragment, memo, useContext, useState, type DragEvent, type MouseEvent } from 'react';
 import { useNavigate, useParams } from 'react-router';
 import { ChevronDown, FolderPlus, Hash, Lock, LogOut, PlusCircle, Settings, UserPlus, Volume2, X } from 'lucide-react';
 import { http } from '../../api/client';
@@ -6,7 +6,7 @@ import { ChannelType, type Channel, type GuildPayload } from '../../api/types';
 import { confirmDeleteChannel, confirmLeaveGuild, reportError } from '../../lib/actions';
 import { cn } from '../../lib/cn';
 import { copyText } from '../../lib/format';
-import { useChannelPermissions, useChannelTree, useGuildPermissions, type CategoryGroup } from '../../lib/hooks';
+import { useChannelPermissions, useChannelTree, useGuildPermissions, useThreads, type CategoryGroup } from '../../lib/hooks';
 import { showChat } from '../../lib/mobile';
 import { isNewer } from '../../lib/snowflake';
 import { prefetchMessages } from '../../stores/messages';
@@ -325,10 +325,51 @@ function CategorySection({ group, selectedId, guildId }: { group: CategoryGroup;
       )}
       <ul>
         {visible.map((c) => (
-          <ChannelItem key={c.id} channel={c} selected={c.id === selectedId} />
+          <Fragment key={c.id}>
+            <ChannelItem channel={c} selected={c.id === selectedId} />
+            {c.type === ChannelType.GuildText && <ThreadList guildId={guildId} parentId={c.id} selectedId={selectedId} />}
+          </Fragment>
         ))}
       </ul>
     </li>
+  );
+}
+
+const ThreadItem = memo(function ThreadItem({ thread, selected }: { thread: Channel; selected: boolean }) {
+  const navigate = useNavigate();
+  const unread = useData((s) => isNewer(thread.last_message_id, s.readStates[thread.id]?.last ?? '0'));
+  const mentions = useData((s) => s.readStates[thread.id]?.mentions ?? 0);
+  return (
+    <li className="relative py-px pl-8 pr-2">
+      <span className="absolute left-[22px] top-0 h-[17px] w-3 rounded-bl-md border-b-2 border-l-2 border-icon-muted/40" aria-hidden />
+      <button
+        data-testid={`thread-${thread.name}`}
+        onClick={() => {
+          navigate(`/channels/${thread.guild_id}/${thread.id}`);
+          showChat();
+        }}
+        onMouseEnter={() => !selected && prefetchMessages(thread.id)}
+        className={cn(
+          'flex h-8 w-full items-center gap-2 rounded px-2 text-left text-sm font-medium',
+          selected ? 'bg-selected text-header' : unread ? 'text-header hover:bg-hover' : 'text-muted hover:bg-hover hover:text-icon-hover',
+        )}
+      >
+        <span className={cn('flex-1 truncate', unread && !selected && 'font-semibold')}>{thread.name}</span>
+        {mentions > 0 && !selected && <span className="flex h-4 min-w-4 items-center justify-center rounded-full bg-dnd px-1 text-xs font-bold text-white">{mentions}</span>}
+      </button>
+    </li>
+  );
+});
+
+function ThreadList({ guildId, parentId, selectedId }: { guildId: string; parentId: string; selectedId?: string }) {
+  const threads = useThreads(guildId, parentId);
+  if (!threads.length) return null;
+  return (
+    <ul aria-label="Threads">
+      {threads.map((t) => (
+        <ThreadItem key={t.id} thread={t} selected={t.id === selectedId} />
+      ))}
+    </ul>
   );
 }
 

@@ -129,21 +129,41 @@ identifiziert sich neu (vollständiger READY-Snapshot).
 | A3 | TOTP selbst implementiert (RFC 6238, SHA-1, 6 Stellen, 30 s, ±1 Schritt) | Klein, mit RFC-Testvektoren getestet; Replay-Schutz über `totp_last_step` |
 | A4 | Login mit 2FA liefert ein HMAC-signiertes Ticket (5 min) | Zustandslos, kein zweiter Tabelleneintrag |
 | A5 | Avatare/Icons/Banner werden im Client per Canvas skaliert und als Data-URI gesendet | Kein Bild-Decoding im Server (Sicherheit, CPU); Server prüft Magic Bytes und Größe |
-| A6 | Phase 1 nutzt einen In-Process-Gateway-Hub; Redis-Pub/Sub-Fan-out für mehrere Instanzen folgt in Phase 2 | Phase 1 ist Single-Node lauffähig; die Hub-Schnittstelle ist dafür ausgelegt |
+| A6 | Gateway-Hub im Prozess; Redis-Pub/Sub-Fan-out erst im Skalierungs-Meilenstein (mehrere Server-Instanzen) | Für selbst gehostete Ein-Server-Installationen ohne Nutzen; erfordert verteilte Präsenz. Die Fan-out-Stellen (`dispatch_*`) sind zentralisiert und werden dann zielbasiert über Redis verteilt |
 | A7 | UI-Sprache Deutsch, Code und API Englisch | Zielgruppe |
 | A8 | Ohne konfiguriertes S3 speichert der Server Uploads lokal (`UPLOAD_DIR`) | Entwicklung ohne Docker |
 | A9 | Kanalnamen von Textkanälen werden normalisiert (klein, Leerzeichen → `-`) | Wie im Vorbild |
 | A10 | Rate-Limit für Auth-Endpunkte: feste Fenster pro IP (Standard 30/min) | Brute-Force-Schutz ohne externe Abhängigkeit |
 | A11 | Präsenz „offline“ sofort beim Trennen der letzten Verbindung | Einfach; Grace-Period kann ergänzt werden |
 | A12 | Tauri-Build braucht WebKitGTK (Linux) bzw. WebView2 (Windows); Web-Version läuft ohne | Gleiche Codebasis |
+| A14 | Link-Vorschaubilder laufen über einen HMAC-signierten Proxy des Servers | Datenschutz: Dritte sehen keine Nutzer-IPs. SSRF-Schutz: keine privaten/Loopback-Adressen, auch nicht nach DNS oder Weiterleitung |
+| A15 | Anhänge haben unratbare, nicht ablaufende URLs (Token im Pfad) | Keine „toten Links“ wie bei ablaufenden CDN-URLs; HTML/SVG werden nie inline ausgeliefert |
+| A16 | Keine künstlichen Limits für Einzelnutzer: 4000 Zeichen, Upload-Größe legt der Betreiber fest, eigene Emojis überall nutzbar | Abgrenzung zu Paywall-Modellen |
+| A17 | Threads sind Kanäle (Typ 11) und erben die Rechte des Elternkanals | Ein Berechtigungsmodell für alles |
 | A13 | S3-Speicher in docker-compose ist **SeaweedFS** statt MinIO | MinIO veröffentlicht keine Images mehr auf Docker Hub; der Server spricht generisches S3 und legt den Bucket bei Bedarf selbst an |
 
 ## Phasen
 
 - [x] **Phase 1** – Auth (Registrierung, Login, 2FA), Profil, Status, Layout, Server, Kategorien,
       Kanäle, Drag & Drop, Einladungen, Präsenz, Mitgliederliste, Einstellungen, Shortcuts
-- [ ] **Phase 2** – Nachrichten (virtualisiert, gruppiert), Bearbeiten/Löschen/Antworten, Reaktionen,
-      Markdown, Uploads, Embeds, Pins, Typing, Unread/Mentions, Redis-Fan-out
+- [x] **Phase 2** – Nachrichten (virtualisiert, gruppiert), Bearbeiten/Löschen/Antworten, Reaktionen,
+      Markdown mit Syntax-Highlighting, Uploads, Link-Vorschauen, Pins, Threads, eigene Emojis,
+      Typing, Unread/Mentions
+- [ ] **Phase 2b – Alleinstellungsmerkmale** (siehe unten), vor Voice empfohlen
 - [ ] **Phase 3** – DMs, Gruppen-DMs, Freunde, Rollenverwaltung, Kanal-Overwrites-UI
 - [ ] **Phase 4** – Voice/Video/Screenshare über LiveKit
 - [ ] **Phase 5** – Suche, Moderation (Kick/Bann/Timeout), Audit-Log, Benachrichtigungen, Feinschliff
+- [ ] **Skalierung** – Redis-Pub/Sub-Fan-out, verteilte Präsenz, Caching der Berechtigungskontexte
+
+## Alleinstellungsmerkmale (Recherche November 2026)
+
+Ein reiner Klon hat keine Chance; Fluxer, Stoat u. a. kopieren bereits die Oberfläche. Die größten
+offenen Probleme laut Nutzerstimmen: Ausweis-/Gesichtsprüfung samt Datenleck, Wissen geht in Chats
+verloren (schlechte Suche, nicht über Google auffindbar), Werbung und Paywall. dcPoint setzt auf drei Säulen:
+
+1. **Wissen, das bleibt:** „Als Lösung markieren“ (Flag `SOLUTION` bereits im Datenmodell) → automatische
+   FAQ/Wissensdatenbank pro Server; opt-in öffentliches, indexierbares Archiv ausgewählter Kanäle;
+   Volltextsuche, die Code und Versionsnummern findet (`tsvector`-Index vorhanden); „Was hab ich verpasst?“.
+2. **Privatsphäre als Versprechen:** keine Ausweisprüfung, keine Werbung, kein Tracking, Bild-Proxy,
+   selbst hostbar mit einem Befehl, keine Paywall für Grundfunktionen.
+3. **Einfacher Umzug:** Import aus dem Discord-Datenexport und eine Brücke für die Übergangszeit.

@@ -1,8 +1,13 @@
 import { useEffect, useRef, useState, type DragEvent } from 'react';
-import { Bell, CircleHelp, Hash, Inbox, Menu, MessagesSquare, Pin, Search, Upload, Users } from 'lucide-react';
-import type { Channel } from '../../api/types';
+import { Archive, ArchiveRestore, Bell, ChevronRight, CircleHelp, Hash, Inbox, Menu, MessagesSquare, Pin, Search, Upload, Users } from 'lucide-react';
+import { useNavigate } from 'react-router';
+import { http } from '../../api/client';
+import { reportError } from '../../lib/actions';
+import { useData } from '../../stores/data';
+import { ThreadsPopout } from '../chat/ThreadViews';
+import { ChannelType, type Channel } from '../../api/types';
 import { cn } from '../../lib/cn';
-import { useChannelPermissions } from '../../lib/hooks';
+import { useChannel, useChannelPermissions } from '../../lib/hooks';
 import { has, P } from '../../lib/permissions';
 import { openModal, toast } from '../../stores/overlay';
 import { useUi } from '../../stores/ui';
@@ -31,14 +36,36 @@ export function ChannelHeader({ channel }: { channel: Channel }) {
   const openMembers = useMobileNav((s) => s.setMembersOpen);
   const [query, setQuery] = useState('');
   const [pinsAnchor, setPinsAnchor] = useState<DOMRect | null>(null);
+  const [threadsAnchor, setThreadsAnchor] = useState<DOMRect | null>(null);
+  const navigate = useNavigate();
+  const perms = useChannelPermissions(channel);
+  const me = useData((s) => s.me?.id);
+  const isThread = channel.type === ChannelType.PublicThread;
+  const parent = useChannel(isThread ? (channel.parent_id ?? undefined) : undefined);
+  const canArchive = isThread && (channel.owner_id === me || has(perms, P.MANAGE_THREADS));
+  const toggleArchive = () =>
+    void http
+      .patch<Channel>(`/channels/${channel.id}`, { archived: !channel.archived })
+      .then((c) => useData.getState().upsertChannel(c))
+      .catch(reportError);
   return (
     <header className="relative z-[2] flex h-12 shrink-0 items-center gap-2 px-2 shadow-[0_1px_0_rgb(4_4_5/0.2),0_1.5px_0_rgb(6_6_7/0.05),0_2px_0_rgb(4_4_5/0.05)]">
       <div className="flex min-w-0 flex-1 items-center gap-2 pl-2 max-md:pl-0">
         <button aria-label="Kanäle anzeigen" onClick={showNav} className="flex p-1 text-icon md:hidden">
           <Menu size={24} />
         </button>
-        <Hash size={24} className="shrink-0 text-icon-muted" />
+        {isThread && parent && (
+          <>
+            <button onClick={() => navigate(`/channels/${channel.guild_id}/${parent.id}`)} className="flex min-w-0 shrink items-center gap-1 text-muted hover:text-header">
+              <Hash size={20} className="shrink-0" />
+              <span className="truncate font-semibold max-md:hidden">{parent.name}</span>
+            </button>
+            <ChevronRight size={16} className="shrink-0 text-icon-muted" />
+          </>
+        )}
+        {isThread ? <MessagesSquare size={22} className="shrink-0 text-icon-muted" /> : <Hash size={24} className="shrink-0 text-icon-muted" />}
         <h1 className="shrink-0 truncate text-base font-semibold text-header">{channel.name}</h1>
+        {isThread && channel.archived && <span className="rounded bg-input-strong px-1.5 text-xs font-semibold uppercase text-muted">Archiviert</span>}
         {channel.topic && (
           <>
             <div className="mx-2 h-6 w-px shrink-0 bg-divider max-md:hidden" />
@@ -49,9 +76,21 @@ export function ChannelHeader({ channel }: { channel: Channel }) {
         )}
       </div>
       <div className="flex shrink-0 items-center gap-3 pr-2">
-        <HeaderIcon label="Threads" desktopOnly onClick={() => toast('Threads folgen im nächsten Schritt von Phase 2.')}>
-          <MessagesSquare size={22} />
-        </HeaderIcon>
+        {isThread ? (
+          canArchive && (
+            <HeaderIcon label={channel.archived ? 'Thread wiederherstellen' : 'Thread archivieren'} onClick={toggleArchive}>
+              {channel.archived ? <ArchiveRestore size={22} /> : <Archive size={22} />}
+            </HeaderIcon>
+          )
+        ) : (
+          <HeaderIcon
+            label="Threads"
+            active={!!threadsAnchor}
+            onClick={() => setThreadsAnchor(threadsAnchor ? null : document.querySelector('[aria-label="Threads"]')!.getBoundingClientRect())}
+          >
+            <MessagesSquare size={22} />
+          </HeaderIcon>
+        )}
         <HeaderIcon label="Benachrichtigungseinstellungen" desktopOnly onClick={() => toast('Benachrichtigungen folgen in Phase 5.')}>
           <Bell size={22} />
         </HeaderIcon>
@@ -92,6 +131,9 @@ export function ChannelHeader({ channel }: { channel: Channel }) {
           <CircleHelp size={22} />
         </HeaderIcon>
       </div>
+      {threadsAnchor && (
+        <ThreadsPopout channel={channel} anchor={threadsAnchor} onClose={() => setThreadsAnchor(null)} canCreate={has(perms, P.CREATE_PUBLIC_THREADS)} />
+      )}
       {pinsAnchor && <PinsPopout channelId={channel.id} guildId={channel.guild_id} anchor={pinsAnchor} onClose={() => setPinsAnchor(null)} />}
     </header>
   );

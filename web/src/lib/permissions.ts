@@ -88,8 +88,11 @@ export function channelPermissions(ctx: PermContext, channel: Channel): bigint {
   if (member) perms = (perms & ~BigInt(member.deny)) | BigInt(member.allow);
   if (timedOut(ctx)) perms &= P.VIEW_CHANNEL | P.READ_MESSAGE_HISTORY;
   if (!(perms & P.VIEW_CHANNEL)) return 0n;
-  if (channel.type === ChannelType.GuildText) {
+  if (channel.type === ChannelType.GuildText || channel.type === ChannelType.PublicThread) {
     perms &= ~VOICE_ONLY;
+    if (channel.type === ChannelType.PublicThread) {
+      perms = perms & P.SEND_MESSAGES_IN_THREADS ? perms | P.SEND_MESSAGES : perms & ~P.SEND_MESSAGES;
+    }
     if (!(perms & P.SEND_MESSAGES)) perms &= ~(P.SEND_TTS_MESSAGES | P.MENTION_EVERYONE | P.ATTACH_FILES | P.EMBED_LINKS);
   } else if (channel.type === ChannelType.GuildVoice && !(perms & P.CONNECT)) {
     perms &= ~(VOICE_ONLY & ~P.CONNECT);

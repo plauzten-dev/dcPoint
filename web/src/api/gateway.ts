@@ -194,6 +194,18 @@ function applyReaction(e: ReactionEvent, delta: 1 | -1) {
   });
 }
 
+/** Keeps a thread's message counter (sidebar + starter message chip) current. */
+function bumpThreadCount(channelId: string, delta: 1 | -1) {
+  const s = useData.getState();
+  const guildId = s.channelGuild[channelId];
+  const thread = guildId ? s.channels[guildId]?.[channelId] : undefined;
+  if (!thread || thread.type !== 11) return;
+  const message_count = Math.max(0, thread.message_count + delta);
+  s.upsertChannel({ ...thread, message_count, archived: delta > 0 ? false : thread.archived });
+  if (thread.parent_id && thread.thread_message_id)
+    useMessages.getState().patch(thread.parent_id, thread.thread_message_id, (m) => (m.thread ? { ...m, thread: { ...m.thread, message_count } } : m));
+}
+
 function handleDispatch(t: string, d: unknown) {
   const s = useData.getState();
   switch (t) {
@@ -201,6 +213,7 @@ function handleDispatch(t: string, d: unknown) {
       const m = d as Message;
       useMessages.getState().upsert(m);
       s.bumpLastMessage(m.channel_id, m.id);
+      bumpThreadCount(m.channel_id, 1);
       if (m.author) useTyping.getState().stop(m.channel_id, m.author.id);
       if (m.author?.id === s.me?.id) s.markRead(m.channel_id, m.id);
       else if (viewing.channelId === m.channel_id && viewing.atBottom && document.hasFocus()) ackChannel(m.channel_id, m.id);
@@ -215,6 +228,7 @@ function handleDispatch(t: string, d: unknown) {
     case 'MESSAGE_DELETE': {
       const { id, channel_id } = d as { id: string; channel_id: string };
       useMessages.getState().remove(channel_id, id);
+      bumpThreadCount(channel_id, -1);
       break;
     }
     case 'MESSAGE_REACTION_ADD':
@@ -267,9 +281,13 @@ function handleDispatch(t: string, d: unknown) {
     case 'CHANNEL_UPDATE':
       s.upsertChannel(d as Channel);
       break;
-    case 'CHANNEL_DELETE':
-      s.removeChannel(d as Channel);
+    case 'CHANNEL_DELETE': {
+      const c = d as Channel;
+      s.removeChannel(c);
+      if (c.type === 11 && c.parent_id && c.thread_message_id)
+        useMessages.getState().patch(c.parent_id, c.thread_message_id, (m) => ({ ...m, thread: null }));
       break;
+    }
     case 'GUILD_MEMBER_ADD': {
       const m = d as Member;
       updateMembers(m.guild_id, (list) => (list.some((x) => x.user.id === m.user.id) ? list : [...list, m]));

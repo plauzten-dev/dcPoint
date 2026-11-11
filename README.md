@@ -3,10 +3,27 @@
 Schnelle, selbst hostbare Chat- und Community-App mit Servern, Kanälen, Rollen und Echtzeit-Gateway.
 Desktop-Client auf Basis von **Tauri 2**, Backend in **Rust (Axum)**, Frontend in **React + TypeScript**.
 
-> Status: **Phase 1** abgeschlossen (Auth inkl. 2FA, Layout, Server, Kategorien, Kanäle, Einladungen,
-> Präsenz, Einstellungen). Roadmap und Architektur: [PLAN.md](PLAN.md).
+> Status: **Phase 1 und 2** abgeschlossen (Auth inkl. 2FA, Server, Kanäle, Einladungen, Präsenz,
+> Echtzeit-Nachrichten, Threads, Reaktionen, Uploads, Link-Vorschauen, eigene Emojis).
+> Roadmap, Architektur und Alleinstellungsmerkmale: [PLAN.md](PLAN.md).
 
-## Funktionsumfang (Phase 1)
+## Funktionsumfang
+
+### Nachrichten (Phase 2)
+
+- Echtzeit-Chat mit optimistischem Senden, virtualisierter Liste (auch bei Tausenden Nachrichten flüssig)
+  und Gruppierung aufeinanderfolgender Nachrichten (7 Minuten)
+- Markdown: **fett**, *kursiv*, __unterstrichen__, ~~durchgestrichen~~, `Code`, Code-Blöcke mit
+  Syntax-Hervorhebung, ||Spoiler||, Zitate, Überschriften, Listen, Links
+- Antworten, Bearbeiten (↑ im leeren Feld), Löschen, Anpinnen, Reaktionen mit Emoji-Auswahl
+- @Erwähnungen von Personen, Rollen und @everyone mit Autovervollständigung; #Kanal-Links
+- Datei- und Bild-Uploads (Plus-Knopf, Einfügen, Drag & Drop) mit Vorschau, Spoiler und Fortschritt
+- Link-Vorschauen; Bilder darin laufen über den eigenen Server (Dritte sehen keine Nutzer-IPs)
+- Threads aus Nachrichten oder frei, mit Archivieren
+- Eigene Server-Emojis, nutzbar in allen Servern und Reaktionen – ohne Abo
+- „… schreibt gerade“, Ungelesen-Markierungen, Erwähnungs-Badges, `Esc` markiert als gelesen
+
+### Grundlagen (Phase 1)
 
 - **Accounts:** Registrierung, Login per E-Mail oder Benutzername, 2FA (TOTP, mit QR-Code),
   Passwort ändern (meldet alle anderen Sitzungen ab), Abmelden
@@ -138,6 +155,9 @@ cd e2e && npm install && npx playwright install chromium && npm test
 | `AUTH_RATE_LIMIT_PER_MIN` | `30` | Auth-Anfragen pro IP und Minute (`0` = aus) |
 | `DB_MAX_CONNECTIONS` | `20` | Größe des DB-Pools |
 | `WORKER_ID` | `1` | Snowflake-Worker (0–1023), pro Instanz eindeutig |
+| `MAX_UPLOAD_MB` | `50` | Maximale Größe pro Datei (bis zu 10 Dateien pro Nachricht) |
+| `MESSAGE_RATE_LIMIT` | `5` | Nachrichten pro Nutzer und 5 Sekunden (`0` = aus) |
+| `EMBEDS_ENABLED` | `true` | Link-Vorschauen abrufen |
 
 Frontend: `VITE_API_URL` (Basis-URL der API, leer = gleicher Origin) und optional `VITE_GATEWAY_URL`.
 

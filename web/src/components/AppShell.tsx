@@ -119,7 +119,7 @@ export function GuildView() {
   const memberListOpen = useUi((s) => s.memberListOpen);
   const mobile = useIsMobile();
   const setLastChannel = useUi((s) => s.setLastChannel);
-  const valid = !!channel && channel.guild_id === guildId && channel.type === ChannelType.GuildText;
+  const valid = !!channel && channel.guild_id === guildId && (channel.type === ChannelType.GuildText || channel.type === ChannelType.PublicThread);
 
   useEffect(() => {
     if (valid && channelId) setLastChannel(guildId, channelId);

@@ -5,6 +5,7 @@ import { ChannelType, type Channel, type Member } from '../api/types';
 import { useData } from '../stores/data';
 import { queryClient } from './queryClient';
 import { basePermissions, channelPermissions, has, type PermContext } from './permissions';
+import { cmpId } from './snowflake';
 
 export interface CategoryGroup {
   category: Channel | null;
@@ -23,7 +24,7 @@ export function buildChannelTree(channels: Record<string, Channel> | undefined):
   const categories = all.filter((c) => c.type === ChannelType.GuildCategory).sort(byPosition);
   const children = new Map<string | null, Channel[]>();
   for (const c of all) {
-    if (c.type === ChannelType.GuildCategory) continue;
+    if (c.type === ChannelType.GuildCategory || c.type === ChannelType.PublicThread) continue;
     const parent = c.parent_id && channels[c.parent_id] ? c.parent_id : null;
     const list = children.get(parent) ?? [];
     list.push(c);
@@ -42,6 +43,18 @@ export function useChannelTree(guildId: string | undefined): CategoryGroup[] {
 /** Channels in sidebar order (for Alt+↑/↓ and the quick switcher). */
 export function orderedChannels(guildId: string): Channel[] {
   return buildChannelTree(useData.getState().channels[guildId]).flatMap((g) => g.channels);
+}
+
+/** Active (non-archived) threads of a channel, most recent activity first. */
+export function useThreads(guildId: string | null | undefined, parentId: string): Channel[] {
+  const channels = useData((s) => (guildId ? s.channels[guildId] : undefined));
+  return useMemo(
+    () =>
+      Object.values(channels ?? {})
+        .filter((c) => c.type === ChannelType.PublicThread && c.parent_id === parentId && !c.archived)
+        .sort((a, b) => cmpId(b.last_message_id ?? b.id, a.last_message_id ?? a.id)),
+    [channels, parentId],
+  );
 }
 
 export function useChannel(channelId: string | undefined): Channel | undefined {

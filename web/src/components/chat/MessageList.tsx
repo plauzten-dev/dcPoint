@@ -2,7 +2,8 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import { useNavigate } from 'react-router';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { ArrowDown } from 'lucide-react';
-import type { Attachment, Channel, Message } from '../../api/types';
+import { ChannelType, type Attachment, type Channel, type Message } from '../../api/types';
+import { showChat } from '../../lib/mobile';
 import { reportError } from '../../lib/actions';
 import { has, P } from '../../lib/permissions';
 import { ackChannel, isUnread, mentionsMe, viewing } from '../../lib/readState';
@@ -16,6 +17,7 @@ import { ImageViewer } from './Attachments';
 import { EmojiPicker } from './EmojiPicker';
 import { toggleReaction } from './actions';
 import { ChannelWelcome, DayDivider, MessageItem, UnreadDivider } from './MessageItem';
+import { ThreadWelcome } from './ThreadViews';
 import { UserProfilePopout } from './UserProfilePopout';
 
 const GROUP_MS = 7 * 60 * 1000;
@@ -111,6 +113,8 @@ export function MessageList({ channel, perms }: { channel: Channel; perms: bigin
   const canManage = has(perms, P.MANAGE_MESSAGES);
   const canReact = has(perms, P.ADD_REACTIONS);
   const canSend = has(perms, P.SEND_MESSAGES);
+  const isThread = channel.type === ChannelType.PublicThread;
+  const canThread = channel.type === ChannelType.GuildText && has(perms, P.CREATE_PUBLIC_THREADS);
 
   useEffect(() => {
     void useMessages.getState().load(channelId).catch(reportError);
@@ -204,6 +208,13 @@ export function MessageList({ channel, perms }: { channel: Channel; perms: bigin
 
   const openProfile = useCallback((userId: string, rect: DOMRect) => setProfile({ userId, rect }), []);
   const openPicker = useCallback((message: Message, rect: DOMRect) => setPicker({ message, rect }), []);
+  const openThread = useCallback(
+    (id: string) => {
+      navigate(`/channels/${guildId}/${id}`);
+      showChat();
+    },
+    [navigate, guildId],
+  );
   const jump = useCallback((id: string) => void useMessages.getState().jump(channelId, id).catch(reportError), [channelId]);
 
   const jumpToPresent = () => {
@@ -234,7 +245,9 @@ export function MessageList({ channel, perms }: { channel: Channel; perms: bigin
                 const row = rows[v.index];
                 return (
                   <div key={v.key} data-index={v.index} ref={virtualizer.measureElement} style={{ position: 'absolute', top: 0, left: 0, width: '100%', transform: `translateY(${v.start}px)` }}>
-                    {row.kind === 'welcome' ? (
+                    {row.kind === 'welcome' && isThread ? (
+                      <ThreadWelcome thread={channel} md={md} info={info} />
+                    ) : row.kind === 'welcome' ? (
                       <ChannelWelcome name={channel.name} onEdit={has(perms, P.MANAGE_CHANNELS) ? () => openModal({ type: 'channelSettings', channelId }) : undefined} />
                     ) : row.kind === 'loading' ? (
                       <LoadingSkeleton />
@@ -253,6 +266,8 @@ export function MessageList({ channel, perms }: { channel: Channel; perms: bigin
                         canManage={canManage}
                         canReact={canReact}
                         canSend={canSend}
+                        canThread={canThread}
+                        onOpenThread={openThread}
                         flash={flashId === row.message.id}
                         md={md}
                         onOpenProfile={openProfile}
