@@ -8,6 +8,8 @@ import { cn } from '../../lib/cn';
 import { copyText } from '../../lib/format';
 import { useChannelPermissions, useChannelTree, useGuildPermissions, type CategoryGroup } from '../../lib/hooks';
 import { showChat } from '../../lib/mobile';
+import { isNewer } from '../../lib/snowflake';
+import { prefetchMessages } from '../../stores/messages';
 import { has, P } from '../../lib/permissions';
 import { useData } from '../../stores/data';
 import { openModal, toast, useOverlay } from '../../stores/overlay';
@@ -144,6 +146,8 @@ const ChannelItem = memo(function ChannelItem({ channel, selected }: { channel: 
   const canInvite = has(perms, P.CREATE_INSTANT_INVITE);
   const voice = channel.type === ChannelType.GuildVoice;
   const Icon = voice ? Volume2 : Hash;
+  const unread = useData((s) => !voice && isNewer(channel.last_message_id, s.readStates[channel.id]?.last ?? '0'));
+  const mentions = useData((s) => s.readStates[channel.id]?.mentions ?? 0);
   const dropHere = drag.target?.id === channel.id && drag.dragging && drag.dragging.type !== ChannelType.GuildCategory ? drag.target.pos : null;
 
   const open = () => {
@@ -173,7 +177,13 @@ const ChannelItem = memo(function ChannelItem({ channel, selected }: { channel: 
   };
 
   return (
-    <li className="relative px-2 py-px" onDragOver={onDragOver} onDrop={(e) => (e.preventDefault(), drag.drop())}>
+    <li
+      className="relative px-2 py-px"
+      onDragOver={onDragOver}
+      onDrop={(e) => (e.preventDefault(), drag.drop())}
+      onMouseEnter={() => !voice && !selected && prefetchMessages(channel.id)}
+    >
+      {unread && !selected && <span className="absolute left-0 top-1/2 h-2 w-1 -translate-y-1/2 rounded-r bg-header" aria-hidden />}
       {dropHere && <div className={cn('absolute left-2 right-2 z-10 h-0.5 rounded bg-online', dropHere === 'before' ? 'top-0' : 'bottom-0')} />}
       <div
         role="link"
@@ -192,7 +202,7 @@ const ChannelItem = memo(function ChannelItem({ channel, selected }: { channel: 
         onContextMenu={menu}
         className={cn(
           'group flex h-[34px] cursor-pointer items-center gap-1.5 rounded px-2 transition-colors duration-75',
-          selected ? 'bg-selected text-header' : 'text-muted hover:bg-hover hover:text-icon-hover',
+          selected ? 'bg-selected text-header' : unread ? 'text-header hover:bg-hover' : 'text-muted hover:bg-hover hover:text-icon-hover',
           drag.dragging?.id === channel.id && 'opacity-40',
         )}
       >
@@ -200,7 +210,12 @@ const ChannelItem = memo(function ChannelItem({ channel, selected }: { channel: 
           <Icon size={20} className={selected ? 'text-header-2' : 'text-icon-muted'} />
           {isPrivate(channel) && <Lock size={9} strokeWidth={3} className="absolute -right-0.5 -top-0.5 rounded-sm bg-sidebar text-icon-muted" />}
         </span>
-        <span className={cn('flex-1 truncate text-base font-medium leading-5', selected && 'text-header')}>{channel.name}</span>
+        <span className={cn('flex-1 truncate text-base font-medium leading-5', (selected || unread) && 'text-header', unread && !selected && 'font-semibold')}>{channel.name}</span>
+        {mentions > 0 && !selected && (
+          <span className="flex h-4 min-w-4 items-center justify-center rounded-full bg-dnd px-1 text-xs font-bold text-white" aria-label={`${mentions} Erwähnungen`}>
+            {mentions > 99 ? '99+' : mentions}
+          </span>
+        )}
         <span className={cn('flex items-center gap-1', !selected && 'hidden group-hover:flex')}>
           {canInvite && (
             <Tooltip text="Einladung erstellen">

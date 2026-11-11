@@ -1,7 +1,10 @@
 import { queryClient } from '../lib/queryClient';
 import { useData } from '../stores/data';
 import { gatewayUrl } from './client';
-import type { Channel, GuildBase, GuildPayload, Member, Presence, PrivateUser, ReadyPayload, User } from './types';
+import { ackChannel, mentionsMe, viewing } from '../lib/readState';
+import { useMessages } from '../stores/messages';
+import { useTyping } from '../stores/typing';
+import type { Channel, GuildBase, GuildPayload, Member, Message, Presence, PrivateUser, ReactionCount, ReadyPayload, User } from './types';
 
 const Op = {
   Dispatch: 0,
@@ -163,11 +166,80 @@ function updateMembers(guildId: string, fn: (members: Member[]) => Member[]) {
   queryClient.setQueryData<Member[]>(['members', guildId], (old) => (old ? fn(old) : old));
 }
 
+interface ReactionEvent {
+  channel_id: string;
+  message_id: string;
+  user_id: string;
+  emoji: string;
+}
+
+function applyReaction(e: ReactionEvent, delta: 1 | -1) {
+  const me = useData.getState().me?.id;
+  useMessages.getState().patch(e.channel_id, e.message_id, (m) => {
+    const list: ReactionCount[] = [...(m.reactions ?? [])];
+    const i = list.findIndex((r) => r.emoji === e.emoji);
+    const mine = e.user_id === me;
+    if (i < 0) {
+      if (delta < 0) return m;
+      list.push({ emoji: e.emoji, count: 1, me: mine });
+    } else {
+      const r = list[i];
+      // Ignore echoes of our own optimistic updates.
+      if (mine && r.me === (delta > 0)) return m;
+      const count = r.count + delta;
+      if (count <= 0) list.splice(i, 1);
+      else list[i] = { ...r, count, me: mine ? delta > 0 : r.me };
+    }
+    return { ...m, reactions: list };
+  });
+}
+
 function handleDispatch(t: string, d: unknown) {
   const s = useData.getState();
   switch (t) {
+    case 'MESSAGE_CREATE': {
+      const m = d as Message;
+      useMessages.getState().upsert(m);
+      s.bumpLastMessage(m.channel_id, m.id);
+      if (m.author) useTyping.getState().stop(m.channel_id, m.author.id);
+      if (m.author?.id === s.me?.id) s.markRead(m.channel_id, m.id);
+      else if (viewing.channelId === m.channel_id && viewing.atBottom && document.hasFocus()) ackChannel(m.channel_id, m.id);
+      else if (mentionsMe(m)) s.addMention(m.channel_id);
+      break;
+    }
+    case 'MESSAGE_UPDATE': {
+      const m = d as Message;
+      useMessages.getState().patch(m.channel_id, m.id, (old) => ({ ...old, ...m, reactions: m.reactions ?? old.reactions }));
+      break;
+    }
+    case 'MESSAGE_DELETE': {
+      const { id, channel_id } = d as { id: string; channel_id: string };
+      useMessages.getState().remove(channel_id, id);
+      break;
+    }
+    case 'MESSAGE_REACTION_ADD':
+      applyReaction(d as ReactionEvent, 1);
+      break;
+    case 'MESSAGE_REACTION_REMOVE':
+      applyReaction(d as ReactionEvent, -1);
+      break;
+    case 'MESSAGE_ACK': {
+      const { channel_id, message_id } = d as { channel_id: string; message_id: string };
+      s.markRead(channel_id, message_id);
+      break;
+    }
+    case 'TYPING_START': {
+      const { channel_id, user_id } = d as { channel_id: string; user_id: string };
+      if (user_id !== s.me?.id) useTyping.getState().start(channel_id, user_id);
+      break;
+    }
+    case 'CHANNEL_PINS_UPDATE':
+      void queryClient.invalidateQueries({ queryKey: ['pins', (d as { channel_id: string }).channel_id] });
+      break;
     case 'READY':
       s.ready(d as ReadyPayload);
+      // Missed events were not replayed: cached message lists may have gaps.
+      useMessages.getState().reset();
       // A fresh snapshot supersedes cached member lists.
       queryClient.invalidateQueries({ queryKey: ['members'] });
       break;

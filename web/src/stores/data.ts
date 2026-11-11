@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { isNewer } from '../lib/snowflake';
 import type { Channel, Guild, GuildBase, GuildPayload, Presence, PrivateUser, ReadyPayload, Role, User } from '../api/types';
 
 export type ConnectionState = 'connecting' | 'ready' | 'reconnecting';
@@ -14,6 +15,8 @@ interface DataState {
   channelGuild: Record<string, string>;
   presences: Record<string, Presence>;
   users: Record<string, User>;
+  /** Per channel: last read message id and unread mention count. */
+  readStates: Record<string, { last: string; mentions: number }>;
 
   setConnection(c: ConnectionState): void;
   ready(p: ReadyPayload): void;
@@ -25,6 +28,10 @@ interface DataState {
   setPresence(p: Presence): void;
   upsertUser(u: User): void;
   setMe(u: PrivateUser): void;
+  /** Records a new message in a channel (unread tracking). */
+  bumpLastMessage(channelId: string, messageId: string): void;
+  markRead(channelId: string, messageId: string): void;
+  addMention(channelId: string): void;
   reset(): void;
 }
 
@@ -55,6 +62,7 @@ const initial = {
   channelGuild: {},
   presences: {},
   users: {},
+  readStates: {},
 };
 
 export const useData = create<DataState>()((set) => ({
@@ -87,6 +95,7 @@ export const useData = create<DataState>()((set) => ({
         channelGuild,
         presences: withSelfPresence(Object.fromEntries(p.presences.map((x) => [x.user_id, x])), p.user),
         users: { ...useData.getState().users, [p.user.id]: p.user },
+        readStates: Object.fromEntries(p.read_states.map((r) => [r.id, { last: r.last_message_id, mentions: r.mention_count }])),
       };
     }),
 
@@ -151,6 +160,28 @@ export const useData = create<DataState>()((set) => ({
   upsertUser: (u) => set((s) => ({ users: { ...s.users, [u.id]: { ...s.users[u.id], ...u } } })),
 
   setMe: (u) => set((s) => ({ me: u, users: { ...s.users, [u.id]: u }, presences: withSelfPresence(s.presences, u) })),
+
+  bumpLastMessage: (channelId, messageId) =>
+    set((s) => {
+      const guildId = s.channelGuild[channelId];
+      const c = guildId ? s.channels[guildId]?.[channelId] : undefined;
+      if (!c || !isNewer(messageId, c.last_message_id)) return {};
+      return { channels: { ...s.channels, [guildId]: { ...s.channels[guildId], [channelId]: { ...c, last_message_id: messageId } } } };
+    }),
+
+  markRead: (channelId, messageId) =>
+    set((s) => {
+      const cur = s.readStates[channelId];
+      if (cur && cur.mentions === 0 && !isNewer(messageId, cur.last)) return {};
+      const last = cur && isNewer(cur.last, messageId) ? cur.last : messageId;
+      return { readStates: { ...s.readStates, [channelId]: { last, mentions: 0 } } };
+    }),
+
+  addMention: (channelId) =>
+    set((s) => {
+      const cur = s.readStates[channelId] ?? { last: '0', mentions: 0 };
+      return { readStates: { ...s.readStates, [channelId]: { ...cur, mentions: cur.mentions + 1 } } };
+    }),
 
   reset: () => set({ ...initial }),
 }));

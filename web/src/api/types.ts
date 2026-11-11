@@ -130,6 +130,66 @@ export interface ReadyPayload {
   user: PrivateUser;
   guilds: GuildPayload[];
   presences: Presence[];
+  read_states: ReadState[];
 }
 
 export type AuthResponse = { token: string; user: PrivateUser } | { mfa: true; ticket: string };
+
+export interface Attachment {
+  id: Snowflake;
+  filename: string;
+  content_type: string;
+  size: number;
+  width: number | null;
+  height: number | null;
+  spoiler: boolean;
+  url: string;
+}
+
+export interface ReactionCount {
+  emoji: string;
+  count: number;
+  me: boolean;
+}
+
+export interface ReferencedMessage {
+  id: Snowflake;
+  author: User | null;
+  content: string;
+  has_attachments: boolean;
+}
+
+export const MessageType = { Default: 0, Reply: 19 } as const;
+export const MessageFlags = { Solution: 1 } as const;
+
+export interface Message {
+  id: Snowflake;
+  channel_id: Snowflake;
+  guild_id: Snowflake | null;
+  author: User | null;
+  content: string;
+  type: number;
+  timestamp: string;
+  edited_at: string | null;
+  pinned: boolean;
+  mention_everyone: boolean;
+  mentions: Snowflake[];
+  mention_roles: Snowflake[];
+  attachments: Attachment[];
+  embeds: unknown[];
+  reactions?: ReactionCount[];
+  reply_to_id: Snowflake | null;
+  referenced_message: ReferencedMessage | null;
+  flags: number;
+  nonce?: string;
+  /** Client-only: optimistic message state. */
+  pending?: boolean;
+  failed?: boolean;
+  progress?: number;
+}
+
+export interface ReadState {
+  id: Snowflake;
+  last_message_id: Snowflake;
+  mention_count: number;
+}

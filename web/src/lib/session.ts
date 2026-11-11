@@ -1,6 +1,7 @@
 import { auth, http } from '../api/client';
 import { gateway } from '../api/gateway';
 import { useData } from '../stores/data';
+import { useMessages } from '../stores/messages';
 import { queryClient } from './queryClient';
 
 export function startSession(token: string) {
@@ -13,6 +14,7 @@ export function endSession() {
   gateway.disconnect();
   auth.set(null);
   useData.getState().reset();
+  useMessages.getState().reset();
   queryClient.clear();
 }
 

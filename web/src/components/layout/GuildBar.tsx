@@ -2,6 +2,7 @@ import { memo, useState, type DragEvent } from 'react';
 import { useNavigate, useParams } from 'react-router';
 import { Plus } from 'lucide-react';
 import { cn } from '../../lib/cn';
+import { isNewer } from '../../lib/snowflake';
 import { copyText } from '../../lib/format';
 import { guildPath } from '../../lib/navigation';
 import { P } from '../../lib/permissions';
@@ -13,13 +14,14 @@ import { GuildIcon } from '../GuildIcon';
 import { LogoMark } from '../ui/Logo';
 import { Tooltip } from '../ui/Tooltip';
 
-function Pill({ state }: { state: 'none' | 'hover' | 'selected' }) {
+function Pill({ state }: { state: 'none' | 'unread' | 'hover' | 'selected' }) {
   return (
     <span className="absolute left-0 top-1/2 flex w-2 -translate-y-1/2 items-center overflow-hidden" aria-hidden>
       <span
         className={cn(
           'block w-2 -translate-x-1 rounded-r bg-header transition-[height,opacity] duration-200',
           state === 'none' && 'h-0 opacity-0',
+          state === 'unread' && 'h-2 opacity-100',
           state === 'hover' && 'h-5 opacity-100',
           state === 'selected' && 'h-10 opacity-100',
         )}
@@ -38,9 +40,11 @@ interface RailItemProps {
   activeClass?: string;
   testId?: string;
   onHover?: () => void;
+  unread?: boolean;
+  mentions?: number;
 }
 
-function RailItem({ label, selected, onClick, onContextMenu, children, idleClass = 'bg-chat text-text', activeClass = 'bg-brand text-white', testId, onHover }: RailItemProps) {
+function RailItem({ label, selected, onClick, onContextMenu, children, idleClass = 'bg-chat text-text', activeClass = 'bg-brand text-white', testId, onHover, unread, mentions = 0 }: RailItemProps) {
   const [hover, setHover] = useState(false);
   return (
     <div
@@ -51,7 +55,7 @@ function RailItem({ label, selected, onClick, onContextMenu, children, idleClass
       }}
       onMouseLeave={() => setHover(false)}
     >
-      <Pill state={selected ? 'selected' : hover ? 'hover' : 'none'} />
+      <Pill state={selected ? 'selected' : hover ? 'hover' : unread ? 'unread' : 'none'} />
       <Tooltip text={label} placement="right" large>
         <button
           aria-label={label}
@@ -67,6 +71,14 @@ function RailItem({ label, selected, onClick, onContextMenu, children, idleClass
           {children}
         </button>
       </Tooltip>
+      {mentions > 0 && (
+        <span
+          className="pointer-events-none absolute bottom-[-2px] right-[10px] flex h-5 min-w-5 items-center justify-center rounded-full border-[3px] border-rail bg-dnd px-1 text-[11px] font-bold text-white"
+          aria-label={`${mentions} Erwähnungen`}
+        >
+          {mentions > 99 ? '99+' : mentions}
+        </span>
+      )}
     </div>
   );
 }
@@ -78,6 +90,8 @@ const GuildItem = memo(function GuildItem({ id, selected, index }: { id: string;
   const canInvite = useCan(id, P.CREATE_INSTANT_INVITE);
   const canManage = useCan(id, P.MANAGE_GUILD);
   const [drop, setDrop] = useState<'above' | 'below' | null>(null);
+  const unread = useData((s) => Object.values(s.channels[id] ?? {}).some((c) => c.type === 0 && isNewer(c.last_message_id, s.readStates[c.id]?.last ?? '0')));
+  const mentions = useData((s) => Object.keys(s.channels[id] ?? {}).reduce((n, cid) => n + (s.readStates[cid]?.mentions ?? 0), 0));
   if (!guild) return null;
 
   const menu = (e: React.MouseEvent) => {
@@ -130,6 +144,8 @@ const GuildItem = memo(function GuildItem({ id, selected, index }: { id: string;
         onClick={() => navigate(guildPath(id))}
         onContextMenu={menu}
         onHover={() => void prefetchMembers(id)}
+        unread={unread}
+        mentions={mentions}
         testId={`guild-${guild.name}`}
       >
         <GuildIcon guild={guild} className="!bg-transparent !text-inherit" />

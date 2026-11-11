@@ -157,6 +157,11 @@ button:disabled {
   outline: 2px solid #00a8fc;
   outline-offset: 1px;
 }
+/* Text fields show focus through their own styling. */
+input:focus-visible,
+textarea:focus-visible {
+  outline: none;
+}
 
 /* Scrollbars */
 .scroller-thin {
@@ -189,4 +194,219 @@ button:disabled {
     animation-duration: 1ms !important;
     transition-duration: 1ms !important;
   }
+}
+
+/* ---------------------------------------------------------------------- */
+/* Message markdown                                                        */
+/* ---------------------------------------------------------------------- */
+.md {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  user-select: text;
+  -webkit-user-select: text;
+}
+.md-jumbo {
+  font-size: 48px;
+  line-height: 1.2;
+}
+.md-code {
+  border-radius: 4px;
+  background: var(--input-strong);
+  padding: 0.1em 0.3em;
+  font-family: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+  font-size: 0.85em;
+}
+.md-codeblock {
+  margin: 6px 0;
+  max-width: 90%;
+  border: 1px solid var(--rail);
+  border-radius: 4px;
+  background: var(--sidebar);
+  padding: 8px 10px;
+  font-family: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+  font-size: 0.875rem;
+  line-height: 1.125rem;
+  white-space: pre-wrap;
+  overflow-x: auto;
+}
+.md-codeblock code {
+  display: block;
+}
+.md-link {
+  color: var(--color-link);
+}
+.md-link:hover {
+  text-decoration: underline;
+}
+.md-mention {
+  border-radius: 3px;
+  padding: 0 2px;
+  background: rgb(108 92 246 / 0.3);
+  color: #e0dcff;
+  font-weight: 500;
+  cursor: pointer;
+}
+.md-mention:hover {
+  background: var(--color-brand);
+  color: #fff;
+}
+.theme-light .md-mention {
+  color: #4b3ccf;
+  background: rgb(108 92 246 / 0.15);
+}
+.md-spoiler {
+  border-radius: 3px;
+  background: #1e1f22;
+  color: transparent;
+  cursor: pointer;
+  transition: background 0.1s;
+}
+.md-spoiler > span {
+  visibility: hidden;
+}
+.md-spoiler:hover {
+  background: #111214;
+}
+.md-spoiler-shown {
+  background: rgb(255 255 255 / 0.1);
+  color: inherit;
+  cursor: text;
+}
+.md-spoiler-shown > span {
+  visibility: visible;
+}
+.theme-light .md-spoiler-shown {
+  background: rgb(0 0 0 / 0.08);
+}
+.md-quote {
+  margin: 2px 0;
+  border-left: 4px solid var(--icon-muted);
+  border-radius: 2px;
+  padding-left: 12px;
+}
+.md-h1,
+.md-h2,
+.md-h3 {
+  margin: 8px 0 4px;
+  font-weight: 700;
+  color: var(--header);
+  line-height: 1.375;
+}
+.md-h1 {
+  font-size: 1.5rem;
+}
+.md-h2 {
+  font-size: 1.25rem;
+}
+.md-h3 {
+  font-size: 1rem;
+}
+.md-sub {
+  display: block;
+  font-size: 0.8125rem;
+  color: var(--muted);
+}
+.md-ul,
+.md-ol {
+  margin: 2px 0 2px 1rem;
+  white-space: normal;
+}
+.md-ul {
+  list-style: disc;
+}
+.md-ol {
+  list-style: decimal;
+}
+.md h1:first-child,
+.md h2:first-child,
+.md h3:first-child {
+  margin-top: 0;
+}
+
+/* highlight.js tokens */
+.hljs-comment,
+.hljs-quote {
+  color: #8b949e;
+  font-style: italic;
+}
+.hljs-keyword,
+.hljs-selector-tag,
+.hljs-literal,
+.hljs-type {
+  color: #ff7b72;
+}
+.hljs-string,
+.hljs-regexp,
+.hljs-addition {
+  color: #a5d6ff;
+}
+.hljs-number,
+.hljs-symbol,
+.hljs-bullet {
+  color: #79c0ff;
+}
+.hljs-title,
+.hljs-title.function_,
+.hljs-section {
+  color: #d2a8ff;
+}
+.hljs-attr,
+.hljs-attribute,
+.hljs-variable,
+.hljs-template-variable,
+.hljs-property {
+  color: #ffa657;
+}
+.hljs-built_in,
+.hljs-name,
+.hljs-tag {
+  color: #7ee787;
+}
+.hljs-meta {
+  color: #79c0ff;
+}
+.hljs-deletion {
+  color: #ffa198;
+}
+.theme-light .hljs-comment {
+  color: #6e7781;
+}
+.theme-light .hljs-keyword,
+.theme-light .hljs-type {
+  color: #cf222e;
+}
+.theme-light .hljs-string,
+.theme-light .hljs-addition {
+  color: #0a3069;
+}
+.theme-light .hljs-number,
+.theme-light .hljs-meta {
+  color: #0550ae;
+}
+.theme-light .hljs-title,
+.theme-light .hljs-section {
+  color: #8250df;
+}
+.theme-light .hljs-attr,
+.theme-light .hljs-variable,
+.theme-light .hljs-property {
+  color: #953800;
+}
+.theme-light .hljs-built_in,
+.theme-light .hljs-name,
+.theme-light .hljs-tag {
+  color: #116329;
+}
+
+@keyframes flash-highlight {
+  0%,
+  60% {
+    background: rgb(108 92 246 / 0.25);
+  }
+  100% {
+    background: transparent;
+  }
+}
+.msg-flash {
+  animation: flash-highlight 2s ease-out;
 }

@@ -64,6 +64,11 @@ export default function AppShell() {
     if (auth.token && !gateway.active) startSession(auth.token);
   }, [navigate]);
 
+  const mentionTotal = useData((s) => Object.values(s.readStates).reduce((n, r) => n + r.mentions, 0));
+  useEffect(() => {
+    document.title = mentionTotal ? `(${mentionTotal}) dcPoint` : 'dcPoint';
+  }, [mentionTotal]);
+
   const ready = !!me;
   useEffect(() => {
     if (ready) preloadModals();

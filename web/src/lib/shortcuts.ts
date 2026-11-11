@@ -6,6 +6,8 @@ import { openModal, useOverlay } from '../stores/overlay';
 import { useUi } from '../stores/ui';
 import { orderedChannels } from './hooks';
 import { guildPath } from './navigation';
+import { ackChannel } from './readState';
+import { useChatUi } from '../stores/chatUi';
 
 export const SHORTCUTS: Array<{ keys: string[]; label: string }> = [
   { keys: ['Strg', 'K'], label: 'Quick Switcher öffnen' },
@@ -19,7 +21,9 @@ export const SHORTCUTS: Array<{ keys: string[]; label: string }> = [
   { keys: ['Strg', 'U'], label: 'Mitgliederliste umschalten' },
   { keys: ['Strg', ','], label: 'Benutzereinstellungen öffnen' },
   { keys: ['Strg', '/'], label: 'Tastaturkürzel anzeigen' },
-  { keys: ['Esc'], label: 'Modal/Popout schließen, Kanal als gelesen markieren (ab Phase 2)' },
+  { keys: ['Esc'], label: 'Kanal als gelesen markieren (oder Modal/Popout schließen)' },
+  { keys: ['↑'], label: 'Letzte eigene Nachricht bearbeiten (im leeren Eingabefeld)' },
+  { keys: ['Umschalt', 'Enter'], label: 'Neue Zeile in der Nachricht' },
 ];
 
 function currentIds(): { guildId?: string; channelId?: string } {
@@ -71,6 +75,8 @@ export function useGlobalShortcuts(navigate: NavigateFunction) {
       } else if (e.key === 'Escape' && useOverlay.getState().modals.length) {
         e.preventDefault();
         useOverlay.getState().closeModal();
+      } else if (e.key === 'Escape' && channelId && !useChatUi.getState().editingId && !useChatUi.getState().replyTo) {
+        ackChannel(channelId);
       }
     };
     window.addEventListener('keydown', onKey);

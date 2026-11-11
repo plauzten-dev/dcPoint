@@ -21,7 +21,7 @@ export default defineConfig({
           url: 'http://127.0.0.1:8080/api/v1/health',
           reuseExistingServer: true,
           timeout: 600_000,
-          env: { DATABASE_URL: databaseUrl, AUTH_RATE_LIMIT_PER_MIN: '0', BIND_ADDR: '127.0.0.1:8080' },
+          env: { DATABASE_URL: databaseUrl, AUTH_RATE_LIMIT_PER_MIN: '0', MESSAGE_RATE_LIMIT: '0', BIND_ADDR: '127.0.0.1:8080' },
         },
         {
           // Test the production bundle (what Docker ships), not the dev server.

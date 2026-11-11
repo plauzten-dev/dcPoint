@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { Bell, CircleHelp, Gift, Hash, Inbox, Menu, MessagesSquare, Pin, PlusCircle, Search, Smile, Sticker, Users } from 'lucide-react';
+import { useEffect, useRef, useState, type DragEvent } from 'react';
+import { Bell, CircleHelp, Hash, Inbox, Menu, MessagesSquare, Pin, Search, Upload, Users } from 'lucide-react';
 import type { Channel } from '../../api/types';
 import { cn } from '../../lib/cn';
 import { useChannelPermissions } from '../../lib/hooks';
@@ -8,6 +8,11 @@ import { openModal, toast } from '../../stores/overlay';
 import { useUi } from '../../stores/ui';
 import { showNav, useIsMobile, useMobileNav } from '../../lib/mobile';
 import { Tooltip } from '../ui/Tooltip';
+import { useChatUi } from '../../stores/chatUi';
+import { useMemberInfo } from '../chat/actions';
+import { addDraftFiles, Composer, TypingIndicator } from '../chat/Composer';
+import { MessageList } from '../chat/MessageList';
+import { PinsPopout } from '../chat/PinsPopout';
 
 function HeaderIcon({ label, onClick, active, children, desktopOnly }: { label: string; onClick: () => void; active?: boolean; children: React.ReactNode; desktopOnly?: boolean }) {
   return (
@@ -25,6 +30,7 @@ export function ChannelHeader({ channel }: { channel: Channel }) {
   const mobile = useIsMobile();
   const openMembers = useMobileNav((s) => s.setMembersOpen);
   const [query, setQuery] = useState('');
+  const [pinsAnchor, setPinsAnchor] = useState<DOMRect | null>(null);
   return (
     <header className="relative z-[2] flex h-12 shrink-0 items-center gap-2 px-2 shadow-[0_1px_0_rgb(4_4_5/0.2),0_1.5px_0_rgb(6_6_7/0.05),0_2px_0_rgb(4_4_5/0.05)]">
       <div className="flex min-w-0 flex-1 items-center gap-2 pl-2 max-md:pl-0">
@@ -43,13 +49,17 @@ export function ChannelHeader({ channel }: { channel: Channel }) {
         )}
       </div>
       <div className="flex shrink-0 items-center gap-3 pr-2">
-        <HeaderIcon label="Threads" desktopOnly onClick={() => toast('Threads folgen in Phase 2.')}>
+        <HeaderIcon label="Threads" desktopOnly onClick={() => toast('Threads folgen im nächsten Schritt von Phase 2.')}>
           <MessagesSquare size={22} />
         </HeaderIcon>
         <HeaderIcon label="Benachrichtigungseinstellungen" desktopOnly onClick={() => toast('Benachrichtigungen folgen in Phase 5.')}>
           <Bell size={22} />
         </HeaderIcon>
-        <HeaderIcon label="Angepinnte Nachrichten" desktopOnly onClick={() => toast('Angepinnte Nachrichten folgen in Phase 2.')}>
+        <HeaderIcon
+          label="Angepinnte Nachrichten"
+          active={!!pinsAnchor}
+          onClick={() => setPinsAnchor(pinsAnchor ? null : document.querySelector('[aria-label="Angepinnte Nachrichten"]')!.getBoundingClientRect())}
+        >
           <Pin size={22} />
         </HeaderIcon>
         <HeaderIcon
@@ -75,70 +85,67 @@ export function ChannelHeader({ channel }: { channel: Channel }) {
           />
           <Search size={16} className="pointer-events-none absolute right-1.5 top-1 text-muted" />
         </form>
-        <HeaderIcon label="Posteingang" desktopOnly onClick={() => toast('Der Posteingang folgt in Phase 2.')}>
+        <HeaderIcon label="Posteingang" desktopOnly onClick={() => toast('Der Posteingang mit allen Erwähnungen folgt mit den Benachrichtigungen (Phase 5).')}>
           <Inbox size={22} />
         </HeaderIcon>
         <HeaderIcon label="Tastaturkürzel" desktopOnly onClick={() => openModal({ type: 'userSettings', section: 'keybinds' })}>
           <CircleHelp size={22} />
         </HeaderIcon>
       </div>
+      {pinsAnchor && <PinsPopout channelId={channel.id} guildId={channel.guild_id} anchor={pinsAnchor} onClose={() => setPinsAnchor(null)} />}
     </header>
   );
 }
 
 export function ChatArea({ channel }: { channel: Channel }) {
   const perms = useChannelPermissions(channel);
-  const canSend = has(perms, P.SEND_MESSAGES);
-  const canManage = has(perms, P.MANAGE_CHANNELS);
-  const [draft, setDraft] = useState('');
+  const info = useMemberInfo(channel.guild_id);
+  const canAttach = has(perms, P.SEND_MESSAGES | P.ATTACH_FILES);
+  const [dragging, setDragging] = useState(false);
+  const dragDepth = useRef(0);
 
+  useEffect(() => () => useChatUi.getState().reset(), [channel.id]);
+
+  const hasFiles = (e: DragEvent) => e.dataTransfer.types.includes('Files');
   return (
-    <main className="flex min-w-0 flex-1 flex-col bg-chat">
+    <main
+      className="relative flex min-w-0 flex-1 flex-col bg-chat"
+      onDragEnter={(e) => {
+        if (!hasFiles(e) || !canAttach) return;
+        dragDepth.current++;
+        setDragging(true);
+      }}
+      onDragLeave={(e) => {
+        if (!hasFiles(e)) return;
+        dragDepth.current = Math.max(0, dragDepth.current - 1);
+        if (dragDepth.current === 0) setDragging(false);
+      }}
+      onDragOver={(e) => hasFiles(e) && canAttach && e.preventDefault()}
+      onDrop={(e) => {
+        if (!hasFiles(e)) return;
+        e.preventDefault();
+        dragDepth.current = 0;
+        setDragging(false);
+        if (canAttach && e.dataTransfer.files.length) addDraftFiles(channel.id, e.dataTransfer.files);
+      }}
+    >
       <ChannelHeader channel={channel} />
-      <div className="flex min-h-0 flex-1">
-        <div className="flex min-w-0 flex-1 flex-col">
-          <div className="scroller-auto flex flex-1 flex-col justify-end">
-            <div className="m-4 mb-6 max-md:mx-3" data-testid="channel-welcome">
-              <div className="mb-2 flex size-[68px] items-center justify-center rounded-full bg-[#4e5058] text-white">
-                <Hash size={42} />
-              </div>
-              <h2 className="my-2 break-words text-[32px] font-bold leading-10 text-header max-md:text-2xl max-md:leading-8">Willkommen in #{channel.name}!</h2>
-              <p className="text-base text-muted">Dies ist der Anfang des Kanals #{channel.name}.</p>
-              {canManage && (
-                <button onClick={() => openModal({ type: 'channelSettings', channelId: channel.id })} className="mt-3 text-sm font-medium text-link hover:underline">
-                  Kanal bearbeiten
-                </button>
-              )}
+      <MessageList channel={channel} perms={perms} />
+      <Composer channel={channel} perms={perms} info={info} />
+      <div className="max-md:pb-[env(safe-area-inset-bottom)]">
+        <TypingIndicator channelId={channel.id} info={info} />
+      </div>
+      {dragging && (
+        <div className="pointer-events-none absolute inset-0 z-30 flex items-center justify-center bg-black/60 p-8">
+          <div className="rounded-xl bg-brand p-2 shadow-elevation">
+            <div className="rounded-lg border-2 border-dashed border-white/60 px-10 py-8 text-center text-white">
+              <Upload size={40} className="mx-auto mb-3" />
+              <div className="text-xl font-bold">Hochladen nach #{channel.name}</div>
+              <div className="mt-1 text-sm opacity-90">Du kannst bis zu 10 Dateien auf einmal hinzufügen.</div>
             </div>
           </div>
-          <form
-            className="shrink-0 px-4 pb-6 max-md:px-2 max-md:pb-[max(8px,env(safe-area-inset-bottom))]"
-            onSubmit={(e) => {
-              e.preventDefault();
-              if (draft.trim()) toast('Echtzeit-Nachrichten werden in Phase 2 freigeschaltet.');
-            }}
-          >
-            <div className={cn('flex min-h-11 items-center rounded-lg bg-input', !canSend && 'opacity-60')}>
-              <button type="button" aria-label="Datei hochladen" disabled={!canSend} className="px-4 text-icon hover:text-icon-hover">
-                <PlusCircle size={22} />
-              </button>
-              <input
-                aria-label={`Nachricht an #${channel.name}`}
-                value={draft}
-                onChange={(e) => setDraft(e.target.value)}
-                disabled={!canSend}
-                placeholder={canSend ? `Nachricht an #${channel.name}` : 'Du hast keine Berechtigung, in diesem Kanal Nachrichten zu senden.'}
-                className="h-11 min-w-0 flex-1 bg-transparent text-base text-text outline-none placeholder:text-icon-muted"
-              />
-              <div className="flex items-center gap-3 px-3 text-icon max-md:hidden">
-                <Gift size={22} className="hover:text-icon-hover" />
-                <Sticker size={22} className="hover:text-icon-hover" />
-                <Smile size={22} className="hover:text-icon-hover" />
-              </div>
-            </div>
-          </form>
         </div>
-      </div>
+      )}
     </main>
   );
 }
